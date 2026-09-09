@@ -28,7 +28,7 @@ async function startServer(): Promise<void> {
     // Register and start scheduled jobs
     registerAllJobs();
 
-    server.listen(env.PORT, () => {
+    server.listen(env.PORT, "0.0.0.0", () => {
       logger.info(`Messages Lab backend is running on port ${env.PORT}`, {
         environment: env.NODE_ENV,
         frontendUrl: env.FRONTEND_URL,
