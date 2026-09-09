@@ -1,0 +1,85 @@
+import mongoose, { Document, Schema } from "mongoose";
+
+export type DeviceStatus = "active" | "offline" | "disabled" | "suspended";
+
+export interface IDeviceHeartbeat {
+  batteryLevel?: number;
+  isCharging?: boolean;
+  networkType?: string;
+  hasSim?: boolean;
+  smsPermissionGranted?: boolean;
+  isSmsCapable?: boolean;
+  appVersion?: string;
+  lastSeenAt: Date;
+}
+
+export interface IDevice extends Document {
+  userId: mongoose.Types.ObjectId;
+  deviceName: string;
+  deviceModel?: string | null;
+  androidVersion?: string | null;
+  appVersion?: string | null;
+  deviceTokenHash: string;
+  status: DeviceStatus;
+  lastHeartbeat?: IDeviceHeartbeat | null;
+  lastSeenAt?: Date | null;
+  connectedAt: Date;
+  disconnectedAt?: Date | null;
+  disabledReason?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const heartbeatSchema = new Schema<IDeviceHeartbeat>(
+  {
+    batteryLevel: { type: Number, min: 0, max: 100 },
+    isCharging: { type: Boolean },
+    networkType: { type: String },
+    hasSim: { type: Boolean },
+    smsPermissionGranted: { type: Boolean },
+    isSmsCapable: { type: Boolean },
+    appVersion: { type: String },
+    lastSeenAt: { type: Date, required: true },
+  },
+  { _id: false }
+);
+
+const deviceSchema = new Schema<IDevice>(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    deviceName: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 100,
+    },
+    deviceModel: { type: String, trim: true, default: null },
+    androidVersion: { type: String, trim: true, default: null },
+    appVersion: { type: String, trim: true, default: null },
+    deviceTokenHash: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    status: {
+      type: String,
+      enum: ["active", "offline", "disabled", "suspended"],
+      default: "active",
+    },
+    lastHeartbeat: { type: heartbeatSchema, default: null },
+    lastSeenAt: { type: Date, default: null },
+    connectedAt: { type: Date, default: Date.now },
+    disconnectedAt: { type: Date, default: null },
+    disabledReason: { type: String, default: null },
+  },
+  { timestamps: true }
+);
+
+deviceSchema.index({ userId: 1, status: 1 });
+deviceSchema.index({ lastSeenAt: 1 });
+
+export const Device = mongoose.model<IDevice>("Device", deviceSchema);

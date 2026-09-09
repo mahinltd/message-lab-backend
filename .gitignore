@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+coverage/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Runtime logs
+logs/*
+!logs/.gitkeep
+*.log
+
+# Local tooling and OS files
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
