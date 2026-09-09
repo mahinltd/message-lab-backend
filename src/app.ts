@@ -29,7 +29,9 @@ app.use(helmet());
 const allowedOrigins = [
   env.FRONTEND_URL,
   env.ADMIN_URL,
-  "http://192.168.0.110:3000"
+  ...(isProduction
+    ? []
+    : ["http://localhost:3000", "http://192.168.0.101:3000"])
 ].filter(
   (origin): origin is string => Boolean(origin)
 );
