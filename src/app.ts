@@ -29,6 +29,7 @@ app.use(helmet());
 const allowedOrigins = [
   env.FRONTEND_URL,
   env.ADMIN_URL,
+  "https://www.messagelab.tech",
   ...(isProduction
     ? []
     : ["http://localhost:3000", "http://192.168.0.101:3000"])
