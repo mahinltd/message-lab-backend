@@ -92,6 +92,18 @@ Refresh tokens are managed through an HTTP-only cookie.
 - Run `npm run build` and `npm start` in production.
 - The server seeds default content and starts scheduled jobs during startup.
 
+### Render Deployment
+
+The included `render.yaml` configures Render to install dependencies, compile TypeScript, and then start the compiled server. If the service was created manually, use these commands in the Render service settings:
+
+```text
+Build Command: npm ci && npm run build
+Start Command: npm start
+Health Check Path: /api/v1/health
+```
+
+Add the values from your local environment as Render environment variables. Do not upload the `.env` file.
+
 ## License
 
 This project is private and not currently distributed under an open-source license.

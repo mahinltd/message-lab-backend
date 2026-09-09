@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: message-lab-backend
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
