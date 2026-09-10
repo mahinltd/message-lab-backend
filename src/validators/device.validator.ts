@@ -21,6 +21,7 @@ export const pairDeviceSchema = z.object({
   deviceModel: z.string().max(100).optional().or(z.literal("")),
   androidVersion: z.string().max(50).optional().or(z.literal("")),
   appVersion: z.string().max(50).optional().or(z.literal("")),
+  idempotencyKey: z.string().min(8).max(64).optional(),
 });
 
 export const heartbeatSchema = z.object({

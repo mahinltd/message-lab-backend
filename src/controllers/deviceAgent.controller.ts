@@ -27,6 +27,7 @@ export const pairDevice = asyncHandler(
         deviceId: result.deviceId,
         userId: result.userId,
         deviceName: result.deviceName,
+        alreadyPaired: result.alreadyPaired,
       },
     });
   }

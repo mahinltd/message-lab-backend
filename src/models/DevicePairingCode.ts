@@ -5,6 +5,7 @@ export interface IDevicePairingCode extends Document {
   code: string;
   expiresAt: Date;
   usedAt?: Date;
+  idempotencyKey?: string | null;
   deviceId?: mongoose.Types.ObjectId;
   createdAt: Date;
 }
@@ -28,6 +29,10 @@ const devicePairingCodeSchema = new Schema<IDevicePairingCode>(
     },
     usedAt: {
       type: Date,
+      default: null,
+    },
+    idempotencyKey: {
+      type: String,
       default: null,
     },
     deviceId: {

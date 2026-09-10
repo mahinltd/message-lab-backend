@@ -19,6 +19,24 @@ export interface PairingCodeResult {
   qrCodeDataUrl: string;
 }
 
+export interface PairDeviceResult {
+  deviceToken: string;
+  deviceId: string;
+  userId: string;
+  deviceName: string;
+  alreadyPaired: boolean;
+}
+
+function generateDeviceToken() {
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto
+    .createHash("sha256")
+    .update(rawToken)
+    .digest("hex");
+
+  return { rawToken, tokenHash };
+}
+
 export class DeviceService {
   /**
    * Generate a 6-digit pairing code and QR code for the user.
@@ -94,114 +112,205 @@ export class DeviceService {
   static async pairDevice(
     input: PairDeviceInput,
     req: Request
-  ): Promise<{
-    deviceToken: string;
-    deviceId: string;
-    userId: string;
-    deviceName: string;
-  }> {
-    const pairingRecord = await DevicePairingCode.findOne({
-      code: input.pairingCode,
-      usedAt: null,
-    });
+  ): Promise<PairDeviceResult> {
+    const now = new Date();
+
+    const replayDevice = async (device: IDevice): Promise<PairDeviceResult> => {
+      const { rawToken, tokenHash } = generateDeviceToken();
+      device.deviceTokenHash = tokenHash;
+      device.status = "active";
+      device.lastSeenAt = now;
+      device.disconnectedAt = null;
+      await device.save();
+
+      logger.info("Idempotent device pairing replay returned existing device", {
+        deviceId: device._id.toString(),
+        userId: device.userId.toString(),
+        idempotencyKey: input.idempotencyKey,
+      });
+
+      return {
+        deviceToken: rawToken,
+        deviceId: device._id.toString(),
+        userId: device.userId.toString(),
+        deviceName: device.deviceName,
+        alreadyPaired: true,
+      };
+    };
+
+    if (input.idempotencyKey) {
+      const existingDevice = await Device.findOne({
+        pairingIdempotencyKey: input.idempotencyKey,
+      });
+
+      if (existingDevice) {
+        return replayDevice(existingDevice);
+      }
+    }
+
+    const pairingRecord = await DevicePairingCode.findOneAndUpdate(
+      {
+        code: input.pairingCode,
+        usedAt: null,
+        expiresAt: { $gt: now },
+      },
+      {
+        $set: {
+          usedAt: now,
+          idempotencyKey: input.idempotencyKey ?? null,
+        },
+      },
+      { new: true }
+    );
 
     if (!pairingRecord) {
-      await SecurityService.recordSecurityEvent({
-        eventType: "INVALID_DEVICE_PAIRING_CODE",
-        severity: "medium",
-        req,
-        description: `Invalid pairing code attempt: ${input.pairingCode}`,
+      const existingCode = await DevicePairingCode.findOne({
+        code: input.pairingCode,
       });
+
+      if (!existingCode) {
+        await SecurityService.recordSecurityEvent({
+          eventType: "INVALID_DEVICE_PAIRING_CODE",
+          severity: "medium",
+          req,
+          description: `Invalid pairing code attempt: ${input.pairingCode}`,
+        });
+
+        throw ApiError.badRequest("Invalid pairing code");
+      }
+
+      if (existingCode.expiresAt <= now) {
+        throw ApiError.badRequest(
+          "Pairing code has expired. Please generate a new one."
+        );
+      }
+
+      if (
+        input.idempotencyKey &&
+        existingCode.usedAt &&
+        existingCode.idempotencyKey === input.idempotencyKey
+      ) {
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const device = await Device.findOne({
+            pairingIdempotencyKey: input.idempotencyKey,
+          });
+
+          if (device) {
+            return replayDevice(device);
+          }
+
+          if (attempt < 4) {
+            await new Promise((resolve) => setTimeout(resolve, 300));
+          }
+        }
+      }
+
+      if (
+        existingCode.usedAt &&
+        input.idempotencyKey &&
+        existingCode.idempotencyKey !== input.idempotencyKey
+      ) {
+        throw ApiError.conflict("Pairing code has already been used");
+      }
 
       throw ApiError.badRequest("Invalid pairing code");
     }
 
-    if (pairingRecord.expiresAt < new Date()) {
-      throw ApiError.badRequest(
-        "Pairing code has expired. Please generate a new one."
-      );
-    }
+    let device: IDevice | null = null;
 
-    // Check device limit for the pairing code owner
-    const activeDeviceCount = await Device.countDocuments({
-      userId: pairingRecord.userId,
-      status: { $in: ["active", "offline"] },
-    });
+    try {
+      // Check device limit only after this request atomically claims the code.
+      const activeDeviceCount = await Device.countDocuments({
+        userId: pairingRecord.userId,
+        status: { $in: ["active", "offline"] },
+      });
 
-    if (activeDeviceCount >= MAX_DEVICES_PER_USER) {
-      throw ApiError.forbidden(
-        "Device limit reached for this account. Please disconnect an existing device first."
-      );
-    }
+      if (activeDeviceCount >= MAX_DEVICES_PER_USER) {
+        throw ApiError.forbidden(
+          "Device limit reached for this account. Please disconnect an existing device first."
+        );
+      }
 
-    // Generate device token
-    const rawToken = crypto.randomBytes(32).toString("hex");
-    const tokenHash = crypto
-      .createHash("sha256")
-      .update(rawToken)
-      .digest("hex");
+      const { rawToken, tokenHash } = generateDeviceToken();
 
-    // Create device record
-    const device: IDevice = await Device.create({
-      userId: pairingRecord.userId,
-      deviceName: input.deviceName,
-      deviceModel: input.deviceModel || undefined,
-      androidVersion: input.androidVersion || undefined,
-      appVersion: input.appVersion || undefined,
-      deviceTokenHash: tokenHash,
-      status: "active",
-      connectedAt: new Date(),
-      lastSeenAt: new Date(),
-      lastHeartbeat: {
-        lastSeenAt: new Date(),
-      },
-    });
-
-    // Mark pairing code as used
-    pairingRecord.usedAt = new Date();
-    pairingRecord.deviceId = device._id;
-    await pairingRecord.save();
-
-    // Audit log
-    await SecurityService.recordAuditLog({
-      userId: pairingRecord.userId,
-      action: "DEVICE_CONNECTED",
-      entityType: "Device",
-      entityId: device._id.toString(),
-      req,
-      metadata: {
+      device = await Device.create({
+        userId: pairingRecord.userId,
         deviceName: input.deviceName,
-        deviceModel: input.deviceModel,
-        androidVersion: input.androidVersion,
-      },
-    });
+        deviceModel: input.deviceModel || undefined,
+        androidVersion: input.androidVersion || undefined,
+        appVersion: input.appVersion || undefined,
+        pairingIdempotencyKey: input.idempotencyKey || undefined,
+        deviceTokenHash: tokenHash,
+        status: "active",
+        connectedAt: now,
+        lastSeenAt: now,
+        lastHeartbeat: {
+          lastSeenAt: now,
+        },
+      });
 
-    // Send device connection email notification
-    const UserModel = mongoose.model("User");
-    const user = await UserModel.findById(pairingRecord.userId);
-    if (user) {
-      await EmailService.sendDeviceAlertEmail(
-        user.email,
-        user.name,
-        "connected",
-        input.deviceName,
-        `${env.FRONTEND_URL}/dashboard/devices`,
-        req.ip
+      pairingRecord.deviceId = device._id;
+      await pairingRecord.save();
+
+      await SecurityService.recordAuditLog({
+        userId: pairingRecord.userId,
+        action: "DEVICE_CONNECTED",
+        entityType: "Device",
+        entityId: device._id.toString(),
+        req,
+        metadata: {
+          deviceName: input.deviceName,
+          deviceModel: input.deviceModel,
+          androidVersion: input.androidVersion,
+          idempotencyKey: input.idempotencyKey,
+        },
+      });
+
+      const UserModel = mongoose.model("User");
+      const user = await UserModel.findById(pairingRecord.userId);
+      if (user) {
+        await EmailService.sendDeviceAlertEmail(
+          user.email,
+          user.name,
+          "connected",
+          input.deviceName,
+          `${env.FRONTEND_URL}/dashboard/devices`,
+          req.ip
+        );
+      }
+
+      logger.info("Device connected successfully", {
+        userId: pairingRecord.userId.toString(),
+        deviceId: device._id.toString(),
+        deviceName: input.deviceName,
+      });
+
+      return {
+        deviceToken: rawToken,
+        deviceId: device._id.toString(),
+        userId: pairingRecord.userId.toString(),
+        deviceName: device.deviceName,
+        alreadyPaired: false,
+      };
+    } catch (error) {
+      await DevicePairingCode.updateOne(
+        {
+          _id: pairingRecord._id,
+          usedAt: now,
+          idempotencyKey: input.idempotencyKey ?? null,
+        },
+        {
+          $set: { usedAt: null, idempotencyKey: null },
+          $unset: { deviceId: 1 },
+        }
       );
+
+      if (device) {
+        await Device.deleteOne({ _id: device._id });
+      }
+
+      throw error;
     }
-
-    logger.info("Device connected successfully", {
-      userId: pairingRecord.userId.toString(),
-      deviceId: device._id.toString(),
-      deviceName: input.deviceName,
-    });
-
-    return {
-      deviceToken: rawToken,
-      deviceId: device._id.toString(),
-      userId: pairingRecord.userId.toString(),
-      deviceName: device.deviceName,
-    };
   }
 
   /**

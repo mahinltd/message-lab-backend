@@ -19,6 +19,7 @@ export interface IDevice extends Document {
   deviceModel?: string | null;
   androidVersion?: string | null;
   appVersion?: string | null;
+  pairingIdempotencyKey?: string | null;
   deviceTokenHash: string;
   status: DeviceStatus;
   lastHeartbeat?: IDeviceHeartbeat | null;
@@ -60,6 +61,7 @@ const deviceSchema = new Schema<IDevice>(
     deviceModel: { type: String, trim: true, default: null },
     androidVersion: { type: String, trim: true, default: null },
     appVersion: { type: String, trim: true, default: null },
+    pairingIdempotencyKey: { type: String, default: null },
     deviceTokenHash: {
       type: String,
       required: true,
@@ -81,5 +83,15 @@ const deviceSchema = new Schema<IDevice>(
 
 deviceSchema.index({ userId: 1, status: 1 });
 deviceSchema.index({ lastSeenAt: 1 });
+deviceSchema.index(
+  { pairingIdempotencyKey: 1 },
+  { unique: true, sparse: true }
+);
+
+deviceSchema.pre("save", function () {
+  if (this.pairingIdempotencyKey === null) {
+    this.set("pairingIdempotencyKey", undefined as unknown as null);
+  }
+});
 
 export const Device = mongoose.model<IDevice>("Device", deviceSchema);
