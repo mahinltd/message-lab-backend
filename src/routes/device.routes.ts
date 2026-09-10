@@ -4,7 +4,8 @@ import {
   generatePairingCode,
   getMyDevices,
   getDeviceById,
-  disconnectDevice,
+  deleteDevice,
+  generateResumeCode,
 } from "../controllers/device.controller";
 
 const router = Router();
@@ -13,8 +14,9 @@ const router = Router();
 router.use(authenticate);
 
 router.post("/pairing-code", generatePairingCode);
+router.post("/:deviceId/resume-code", generateResumeCode);
 router.get("/", getMyDevices);
 router.get("/:deviceId", getDeviceById);
-router.delete("/:deviceId", disconnectDevice);
+router.delete("/:deviceId", deleteDevice);
 
 export default router;

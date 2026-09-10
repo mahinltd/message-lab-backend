@@ -111,3 +111,46 @@ export const disconnectDevice = asyncHandler(
     });
   }
 );
+
+export const generateResumeCode = asyncHandler(
+  async (req: Request, res: Response) => {
+    if (!req.user) {
+      throw ApiError.unauthorized("Authentication required");
+    }
+
+    const result = await DeviceService.generateResumeCode(
+      req.user.userId,
+      String(req.params.deviceId),
+      req
+    );
+
+    res.status(201).json({
+      success: true,
+      data: {
+        code: result.code,
+        qrCodeDataUrl: result.qrCodeDataUrl,
+        expiresAt: result.expiresAt,
+        expiresInMinutes: 10,
+      },
+    });
+  }
+);
+
+export const deleteDevice = asyncHandler(
+  async (req: Request, res: Response) => {
+    if (!req.user) {
+      throw ApiError.unauthorized("Authentication required");
+    }
+
+    await DeviceService.deleteDisabledDevice(
+      req.user.userId,
+      String(req.params.deviceId),
+      req
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Device deleted successfully",
+    });
+  }
+);

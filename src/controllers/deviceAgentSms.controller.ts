@@ -27,6 +27,14 @@ export const fetchNextJob = asyncHandler(
 
     const deviceId = deviceInfo.deviceId;
 
+    if (deviceInfo.gatewayState === "off" || deviceInfo.status !== "active") {
+      res.status(200).json({
+        success: true,
+        data: { job: null, waitMs: 0, message: "Gateway is off" },
+      });
+      return;
+    }
+
     // Acquire device lock to prevent concurrent processing
     const hasLock = await SmsQueueService.acquireDeviceLock(deviceId);
     if (!hasLock) {

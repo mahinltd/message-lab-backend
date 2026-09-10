@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import QRCode from "qrcode";
 import { Device, IDevice, DeviceStatus } from "../models/Device";
 import { DevicePairingCode } from "../models/DevicePairingCode";
+import { IncomingSms } from "../models/IncomingSms";
 import { ApiError } from "../utils/ApiError";
 import { SecurityService } from "./security.service";
 import { EmailService } from "./email.service";
@@ -40,6 +41,15 @@ export interface PairDeviceResult {
   userId: string;
   deviceName: string;
   alreadyPaired: boolean;
+  resumed?: boolean;
+  status?: DeviceStatus;
+  gatewayState?: "on" | "off";
+}
+
+export interface ResumeCodeResult {
+  code: string;
+  expiresAt: Date;
+  qrCodeDataUrl: string;
 }
 
 function generateDeviceToken() {
@@ -53,6 +63,30 @@ function generateDeviceToken() {
 }
 
 export class DeviceService {
+  private static async buildQrCode(
+    code: string,
+    userId: mongoose.Types.ObjectId,
+    deviceName: string,
+    expiresAt: Date,
+    targetDeviceId?: string
+  ): Promise<string> {
+    const qrPayload = JSON.stringify({
+      type: "MESSAGELAB_PAIRING",
+      code,
+      userId: userId.toString(),
+      deviceName,
+      expiresAt: expiresAt.toISOString(),
+      ...(targetDeviceId ? { targetDeviceId } : {}),
+    });
+
+    return QRCode.toDataURL(qrPayload, {
+      width: 300,
+      margin: 2,
+      color: { dark: "#1a1a2e", light: "#ffffff" },
+      errorCorrectionLevel: "M",
+    });
+  }
+
   /**
    * Generate a 6-digit pairing code and QR code for the user.
    * Invalidates any previous unused codes.
@@ -65,7 +99,7 @@ export class DeviceService {
     // Check device limit
     const activeDeviceCount = await Device.countDocuments({
       userId,
-      status: { $in: ["active", "offline"] },
+      status: { $in: ["active", "offline", "paused"] },
     });
 
     if (activeDeviceCount >= MAX_DEVICES_PER_USER) {
@@ -81,7 +115,7 @@ export class DeviceService {
     );
 
     // Generate 6-digit code
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = String(crypto.randomInt(100000, 1000000));
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     await DevicePairingCode.create({
@@ -90,24 +124,12 @@ export class DeviceService {
       expiresAt,
     });
 
-    // Generate QR code containing pairing data
-    const qrPayload = JSON.stringify({
-      type: "MESSAGELAB_PAIRING",
+    const qrCodeDataUrl = await this.buildQrCode(
       code,
-      userId: userId.toString(),
+      userId,
       deviceName,
-      expiresAt: expiresAt.toISOString(),
-    });
-
-    const qrCodeDataUrl = await QRCode.toDataURL(qrPayload, {
-      width: 300,
-      margin: 2,
-      color: {
-        dark: "#1a1a2e",
-        light: "#ffffff",
-      },
-      errorCorrectionLevel: "M",
-    });
+      expiresAt
+    );
 
     await SecurityService.recordAuditLog({
       userId,
@@ -115,6 +137,50 @@ export class DeviceService {
       entityType: "Device",
       req,
       metadata: { deviceName },
+    });
+
+    return { code, expiresAt, qrCodeDataUrl };
+  }
+
+  static async generateResumeCode(
+    userId: string,
+    deviceId: string,
+    req: Request
+  ): Promise<ResumeCodeResult> {
+    const device = await Device.findOne({ _id: deviceId, userId });
+    if (!device) throw ApiError.notFound("Device not found");
+    if (device.status !== "disabled") {
+      throw ApiError.conflict("Only disabled devices can be resumed");
+    }
+
+    await DevicePairingCode.updateMany(
+      { userId, targetDeviceId: device._id, usedAt: null },
+      { $set: { usedAt: new Date() } }
+    );
+
+    const code = String(crypto.randomInt(100000, 1000000));
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await DevicePairingCode.create({
+      userId,
+      code,
+      targetDeviceId: device._id,
+      expiresAt,
+    });
+
+    const qrCodeDataUrl = await this.buildQrCode(
+      code,
+      new mongoose.Types.ObjectId(userId),
+      device.deviceName,
+      expiresAt,
+      device._id.toString()
+    );
+
+    await SecurityService.recordAuditLog({
+      userId: new mongoose.Types.ObjectId(userId),
+      action: "DEVICE_RESUME_CODE_GENERATED",
+      entityType: "Device",
+      entityId: device._id.toString(),
+      req,
     });
 
     return { code, expiresAt, qrCodeDataUrl };
@@ -140,6 +206,7 @@ export class DeviceService {
       device.appVersion = input.appVersion || null;
       device.pairingIdempotencyKey = input.idempotencyKey || null;
       device.status = "active";
+      device.gatewayState = "on";
       device.lastSeenAt = now;
       device.disconnectedAt = null;
       await device.save();
@@ -241,6 +308,52 @@ export class DeviceService {
 
     try {
       const { rawToken, tokenHash } = generateDeviceToken();
+
+      if (pairingRecord.targetDeviceId) {
+        const targetDevice = await Device.findOne({
+          _id: pairingRecord.targetDeviceId,
+          userId: pairingRecord.userId,
+        });
+        if (!targetDevice) throw ApiError.notFound("Resume target device not found");
+        if (targetDevice.status === "suspended") {
+          throw ApiError.forbidden("Device suspended by administrator");
+        }
+
+        targetDevice.deviceTokenHash = tokenHash;
+        targetDevice.deviceName = input.deviceName;
+        targetDevice.deviceModel = input.deviceModel || null;
+        targetDevice.androidVersion = input.androidVersion || null;
+        targetDevice.appVersion = input.appVersion || null;
+        targetDevice.status = "active";
+        targetDevice.gatewayState = "on";
+        targetDevice.connectedAt = now;
+        targetDevice.lastSeenAt = now;
+        targetDevice.disconnectedAt = null;
+        targetDevice.disabledReason = null;
+        targetDevice.lastHeartbeat = {
+          ...(targetDevice.lastHeartbeat || {}),
+          lastSeenAt: now,
+        };
+        await targetDevice.save();
+
+        await SecurityService.recordAuditLog({
+          userId: pairingRecord.userId,
+          action: "DEVICE_RECONNECTED",
+          entityType: "Device",
+          entityId: targetDevice._id.toString(),
+          req,
+        });
+
+        return {
+          deviceToken: rawToken,
+          deviceId: targetDevice._id.toString(),
+          userId: targetDevice.userId.toString(),
+          deviceName: targetDevice.deviceName,
+          alreadyPaired: true,
+          resumed: true,
+        };
+      }
+
       const existingDevice = await Device.findOne({
         userId: pairingRecord.userId,
         clientDeviceId: input.clientDeviceId,
@@ -260,6 +373,7 @@ export class DeviceService {
         existingDevice.appVersion = input.appVersion || null;
         existingDevice.pairingIdempotencyKey = input.idempotencyKey || null;
         existingDevice.status = "active";
+        existingDevice.gatewayState = "on";
         existingDevice.connectedAt = now;
         existingDevice.lastSeenAt = now;
         existingDevice.disconnectedAt = null;
@@ -281,7 +395,7 @@ export class DeviceService {
       // Check device limit only after this request atomically claims the code.
       const activeDeviceCount = await Device.countDocuments({
         userId: pairingRecord.userId,
-        status: { $in: ["active", "offline"] },
+        status: { $in: ["active", "offline", "paused"] },
       });
 
       if (activeDeviceCount >= MAX_DEVICES_PER_USER) {
@@ -300,6 +414,7 @@ export class DeviceService {
         pairingIdempotencyKey: input.idempotencyKey || undefined,
         deviceTokenHash: tokenHash,
         status: "active",
+        gatewayState: "on",
         connectedAt: now,
         lastSeenAt: now,
         lastHeartbeat: {
@@ -380,6 +495,8 @@ export class DeviceService {
   ): Promise<{ status: string }> {
     const now = new Date();
 
+    const currentDevice = await Device.findById(deviceId);
+    if (!currentDevice) throw ApiError.notFound("Device not found");
     const device = await Device.findByIdAndUpdate(
       deviceId,
       {
@@ -392,7 +509,7 @@ export class DeviceService {
         "lastHeartbeat.isSmsCapable": input.isSmsCapable,
         "lastHeartbeat.appVersion": input.appVersion,
         "lastHeartbeat.lastSeenAt": now,
-        status: "active",
+        status: currentDevice.gatewayState === "off" ? "paused" : "active",
       },
       { new: true }
     );
@@ -402,6 +519,71 @@ export class DeviceService {
     }
 
     return { status: device.status };
+  }
+
+  static async enableGateway(deviceId: string, req: Request): Promise<PairDeviceResult> {
+    const device = await Device.findById(deviceId);
+    if (!device) throw ApiError.notFound("Device not found");
+    if (device.status === "suspended") {
+      throw ApiError.forbidden("Device suspended by administrator");
+    }
+    if (device.status === "disabled") {
+      throw ApiError.forbidden(
+        "Device was disconnected from the web dashboard. Reconnect using a resume code."
+      );
+    }
+
+    const { rawToken, tokenHash } = generateDeviceToken();
+    const now = new Date();
+    device.deviceTokenHash = tokenHash;
+    device.gatewayState = "on";
+    device.status = "active";
+    device.disconnectedAt = null;
+    device.disabledReason = null;
+    device.lastSeenAt = now;
+    device.lastHeartbeat = {
+      ...(device.lastHeartbeat || {}),
+      lastSeenAt: now,
+    };
+    await device.save();
+
+    await SecurityService.recordAuditLog({
+      userId: device.userId,
+      action: "DEVICE_GATEWAY_ENABLED",
+      entityType: "Device",
+      entityId: device._id.toString(),
+      req,
+    });
+
+    return {
+      deviceToken: rawToken,
+      deviceId: device._id.toString(),
+      userId: device.userId.toString(),
+      deviceName: device.deviceName,
+      status: "active",
+      alreadyPaired: true,
+      gatewayState: "on",
+      resumed: true,
+    };
+  }
+
+  static async disableGateway(deviceId: string, req: Request): Promise<void> {
+    const device = await Device.findById(deviceId);
+    if (!device) throw ApiError.notFound("Device not found");
+    if (device.status === "suspended") {
+      throw ApiError.forbidden("Device suspended by administrator");
+    }
+
+    device.gatewayState = "off";
+    device.status = "paused";
+    await device.save();
+    await SecurityService.recordAuditLog({
+      userId: device.userId,
+      action: "DEVICE_GATEWAY_DISABLED",
+      entityType: "Device",
+      entityId: device._id.toString(),
+      req,
+    });
   }
 
   /**
@@ -424,6 +606,7 @@ export class DeviceService {
     }
 
     device.status = "disabled";
+    device.gatewayState = "off";
     device.disconnectedAt = new Date();
     device.disabledReason = "Disconnected by user";
     await device.save();
@@ -464,6 +647,31 @@ export class DeviceService {
     });
   }
 
+  static async deleteDisabledDevice(
+    userId: string,
+    deviceId: string,
+    req: Request
+  ): Promise<void> {
+    const device = await Device.findOne({ _id: deviceId, userId });
+    if (!device) throw ApiError.notFound("Device not found");
+    if (device.status !== "disabled") {
+      throw ApiError.conflict("Only disabled devices can be deleted");
+    }
+
+    await IncomingSms.deleteMany({ deviceId: device._id });
+    await DevicePairingCode.deleteMany({
+      $or: [{ deviceId: device._id }, { targetDeviceId: device._id }],
+    });
+    await Device.deleteOne({ _id: device._id });
+    await SecurityService.recordAuditLog({
+      userId: new mongoose.Types.ObjectId(userId),
+      action: "DEVICE_DELETED",
+      entityType: "Device",
+      entityId: deviceId,
+      req,
+    });
+  }
+
   /**
    * Get all devices for a user.
    */
@@ -471,6 +679,7 @@ export class DeviceService {
     const devices = await Device.find({ userId }).sort({ createdAt: -1 }).lean();
     return devices.map((device) => ({
       ...device,
+      gatewayState: device.gatewayState ?? "on",
       status: getEffectiveDeviceStatus(device),
     })) as unknown as IDevice[];
   }
@@ -484,7 +693,11 @@ export class DeviceService {
   ): Promise<IDevice | null> {
     const device = await Device.findOne({ _id: deviceId, userId }).lean();
     return device
-      ? ({ ...device, status: getEffectiveDeviceStatus(device) } as unknown as IDevice)
+      ? ({
+          ...device,
+          gatewayState: device.gatewayState ?? "on",
+          status: getEffectiveDeviceStatus(device),
+        } as unknown as IDevice)
       : null;
   }
 

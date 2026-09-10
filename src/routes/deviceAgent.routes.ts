@@ -1,5 +1,9 @@
 import { Router } from "express";
-import { pairDevice } from "../controllers/deviceAgent.controller";
+import {
+  pairDevice,
+  enableGateway,
+  disableGateway,
+} from "../controllers/deviceAgent.controller";
 import { authenticateDevice } from "../middleware/deviceAuth.middleware";
 import {
   sendHeartbeat,
@@ -22,6 +26,8 @@ router.post("/pair", pairDevice);
 router.use(authenticateDevice);
 
 // Device management
+router.post("/gateway/enable", enableGateway);
+router.post("/gateway/disable", disableGateway);
 router.post("/heartbeat", sendHeartbeat);
 router.get("/status", getDeviceStatus);
 router.post("/disconnect", selfDisconnect);

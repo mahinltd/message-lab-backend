@@ -28,6 +28,7 @@ export const pairDevice = asyncHandler(
         userId: result.userId,
         deviceName: result.deviceName,
         alreadyPaired: result.alreadyPaired,
+        ...(result.resumed !== undefined ? { resumed: result.resumed } : {}),
       },
     });
   }
@@ -84,6 +85,7 @@ export const getDeviceStatus = asyncHandler(
         userId: deviceInfo.userId,
         deviceName: deviceInfo.deviceName,
         status: deviceInfo.status,
+        gatewayState: deviceInfo.gatewayState,
       },
     });
   }
@@ -111,6 +113,42 @@ export const selfDisconnect = asyncHandler(
     res.status(200).json({
       success: true,
       message: "Device disconnected successfully",
+    });
+  }
+);
+
+export const enableGateway = asyncHandler(
+  async (req: Request, res: Response) => {
+    if (!req.device) {
+      throw ApiError.unauthorized("Device authentication required");
+    }
+
+    const result = await DeviceService.enableGateway(req.device.deviceId, req);
+    res.status(200).json({
+      success: true,
+      data: {
+        deviceToken: result.deviceToken,
+        deviceId: result.deviceId,
+        userId: result.userId,
+        deviceName: result.deviceName,
+        status: "active",
+        gatewayState: "on",
+        resumed: true,
+      },
+    });
+  }
+);
+
+export const disableGateway = asyncHandler(
+  async (req: Request, res: Response) => {
+    if (!req.device) {
+      throw ApiError.unauthorized("Device authentication required");
+    }
+
+    await DeviceService.disableGateway(req.device.deviceId, req);
+    res.status(200).json({
+      success: true,
+      message: "Gateway disabled successfully",
     });
   }
 );

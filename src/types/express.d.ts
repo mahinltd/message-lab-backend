@@ -12,6 +12,7 @@ declare global {
         userId: string;
         deviceName: string;
         status: string;
+        gatewayState: "on" | "off";
       };
     }
   }

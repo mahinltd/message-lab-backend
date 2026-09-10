@@ -7,6 +7,7 @@ export interface IDevicePairingCode extends Document {
   usedAt?: Date;
   idempotencyKey?: string | null;
   deviceId?: mongoose.Types.ObjectId;
+  targetDeviceId?: mongoose.Types.ObjectId | null;
   createdAt: Date;
 }
 
@@ -40,12 +41,18 @@ const devicePairingCodeSchema = new Schema<IDevicePairingCode>(
       ref: "Device",
       default: null,
     },
+    targetDeviceId: {
+      type: Schema.Types.ObjectId,
+      ref: "Device",
+      default: null,
+    },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
 devicePairingCodeSchema.index({ userId: 1, usedAt: 1 });
 devicePairingCodeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+devicePairingCodeSchema.index({ targetDeviceId: 1 });
 
 export const DevicePairingCode = mongoose.model<IDevicePairingCode>(
   "DevicePairingCode",

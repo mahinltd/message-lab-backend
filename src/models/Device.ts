@@ -1,6 +1,12 @@
 import mongoose, { Document, Schema } from "mongoose";
 
-export type DeviceStatus = "active" | "offline" | "disabled" | "suspended";
+export type DeviceStatus =
+  | "active"
+  | "offline"
+  | "paused"
+  | "disabled"
+  | "suspended";
+export type GatewayState = "on" | "off";
 
 export interface IDeviceHeartbeat {
   batteryLevel?: number;
@@ -23,6 +29,7 @@ export interface IDevice extends Document {
   pairingIdempotencyKey?: string | null;
   deviceTokenHash: string;
   status: DeviceStatus;
+  gatewayState: GatewayState;
   lastHeartbeat?: IDeviceHeartbeat | null;
   lastSeenAt?: Date | null;
   connectedAt: Date;
@@ -76,8 +83,13 @@ const deviceSchema = new Schema<IDevice>(
     },
     status: {
       type: String,
-      enum: ["active", "offline", "disabled", "suspended"],
+      enum: ["active", "offline", "paused", "disabled", "suspended"],
       default: "active",
+    },
+    gatewayState: {
+      type: String,
+      enum: ["on", "off"],
+      default: "on",
     },
     lastHeartbeat: { type: heartbeatSchema, default: null },
     lastSeenAt: { type: Date, default: null },

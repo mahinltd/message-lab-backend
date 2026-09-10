@@ -40,7 +40,8 @@ export const authenticateDevice = async (
 
     const status = getEffectiveDeviceStatus(device);
 
-    if (status === "disabled" || status === "suspended") {
+    const isGatewayEnable = req.path === "/gateway/enable";
+    if (!isGatewayEnable && (status === "disabled" || status === "suspended")) {
       throw ApiError.forbidden(
         `Device is ${status}. Please reconnect or contact support.`
       );
@@ -52,6 +53,7 @@ export const authenticateDevice = async (
       userId: device.userId.toString(),
       deviceName: device.deviceName,
       status,
+      gatewayState: device.gatewayState ?? "on",
     };
 
     next();
