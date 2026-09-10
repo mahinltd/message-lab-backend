@@ -13,6 +13,11 @@ export const pairDeviceSchema = z.object({
     .string()
     .length(6, "Pairing code must be exactly 6 digits")
     .regex(/^[0-9]{6}$/, "Pairing code must contain only digits"),
+  clientDeviceId: z
+    .string()
+    .min(8, "Client device ID must be at least 8 characters")
+    .max(128, "Client device ID must not exceed 128 characters")
+    .trim(),
   deviceName: z
     .string()
     .min(2, "Device name must be at least 2 characters")

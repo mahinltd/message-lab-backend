@@ -47,6 +47,7 @@ export class SmsService {
       _id: deviceId,
       userId,
       status: "active",
+      lastSeenAt: { $gte: new Date(Date.now() - 5 * 60 * 1000) },
     });
 
     if (!device) {

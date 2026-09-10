@@ -48,12 +48,16 @@ export const getMyDevices = asyncHandler(
     }
 
     const devices = await DeviceService.getUserDevices(req.user.userId);
+    const dashboardDevices = devices.map((device) => ({
+      ...device,
+      isOnline: device.status === "active",
+    }));
 
     res.status(200).json({
       success: true,
       data: {
-        devices,
-        total: devices.length,
+        devices: dashboardDevices,
+        total: dashboardDevices.length,
       },
     });
   }
@@ -82,7 +86,7 @@ export const getDeviceById = asyncHandler(
 
     res.status(200).json({
       success: true,
-      data: { device },
+      data: { device: { ...device, isOnline: device.status === "active" } },
     });
   }
 );

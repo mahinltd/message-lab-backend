@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { Device } from "../models/Device";
 import { ApiError } from "../utils/ApiError";
+import { getEffectiveDeviceStatus } from "../services/device.service";
 
 /**
  * Device authentication middleware.
@@ -37,9 +38,11 @@ export const authenticateDevice = async (
       throw ApiError.unauthorized("Invalid device token");
     }
 
-    if (device.status === "disabled" || device.status === "suspended") {
+    const status = getEffectiveDeviceStatus(device);
+
+    if (status === "disabled" || status === "suspended") {
       throw ApiError.forbidden(
-        `Device is ${device.status}. Please reconnect or contact support.`
+        `Device is ${status}. Please reconnect or contact support.`
       );
     }
 
@@ -48,7 +51,7 @@ export const authenticateDevice = async (
       deviceId: device._id.toString(),
       userId: device.userId.toString(),
       deviceName: device.deviceName,
-      status: device.status,
+      status,
     };
 
     next();

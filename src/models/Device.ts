@@ -15,6 +15,7 @@ export interface IDeviceHeartbeat {
 
 export interface IDevice extends Document {
   userId: mongoose.Types.ObjectId;
+  clientDeviceId: string;
   deviceName: string;
   deviceModel?: string | null;
   androidVersion?: string | null;
@@ -52,6 +53,12 @@ const deviceSchema = new Schema<IDevice>(
       ref: "User",
       required: true,
     },
+    clientDeviceId: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 128,
+    },
     deviceName: {
       type: String,
       required: true,
@@ -82,6 +89,7 @@ const deviceSchema = new Schema<IDevice>(
 );
 
 deviceSchema.index({ userId: 1, status: 1 });
+deviceSchema.index({ userId: 1, clientDeviceId: 1 }, { unique: true });
 deviceSchema.index({ lastSeenAt: 1 });
 deviceSchema.index(
   { pairingIdempotencyKey: 1 },

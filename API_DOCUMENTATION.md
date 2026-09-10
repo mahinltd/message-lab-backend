@@ -644,6 +644,8 @@ GET /api/v1/devices
 | `disabled` | Disconnected by user or admin |
 | `suspended` | Suspended due to security issue |
 
+The backend is the source of truth for dashboard state. `isOnline` is `true` only when `status` is `active`; an active device with no heartbeat for five minutes is returned as `offline`. Disabled and suspended devices are never considered online.
+
 ---
 
 ### 7.3 Get Device Details
@@ -700,6 +702,7 @@ Content-Type: application/json
 ```json
 {
   "pairingCode": "123456",
+  "clientDeviceId": "stable-installation-id-generated-and-stored-by-android",
   "deviceName": "My Samsung Phone",
   "deviceModel": "Galaxy S23",
   "androidVersion": "14",
@@ -723,6 +726,8 @@ Content-Type: application/json
 
 > **Critical:** The `deviceToken` is shown ONLY ONCE. The Android app must store it securely (EncryptedSharedPreferences or Keystore).
 > After this, all subsequent calls use `Authorization: DeviceToken <token>`.
+
+> **Device identity:** `clientDeviceId` must remain stable for the lifetime of an Android app installation and be stored securely. Pairing with the same `clientDeviceId` updates/reconnects the existing device record and returns its existing `deviceId`; it does not create another device record. `idempotencyKey` only protects request retries and is not a device identity.
 
 ---
 

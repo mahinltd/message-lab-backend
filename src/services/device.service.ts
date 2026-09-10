@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import mongoose from "mongoose";
 import QRCode from "qrcode";
-import { Device, IDevice } from "../models/Device";
+import { Device, IDevice, DeviceStatus } from "../models/Device";
 import { DevicePairingCode } from "../models/DevicePairingCode";
 import { ApiError } from "../utils/ApiError";
 import { SecurityService } from "./security.service";
@@ -12,6 +12,21 @@ import { Request } from "express";
 import { PairDeviceInput, HeartbeatInput } from "../validators/device.validator";
 
 const MAX_DEVICES_PER_USER = 1;
+const DEVICE_OFFLINE_TIMEOUT_MS = 5 * 60 * 1000;
+
+export function getEffectiveDeviceStatus(
+  device: Pick<IDevice, "status" | "lastSeenAt">
+): DeviceStatus {
+  if (
+    device.status === "active" &&
+    (!device.lastSeenAt ||
+      device.lastSeenAt.getTime() < Date.now() - DEVICE_OFFLINE_TIMEOUT_MS)
+  ) {
+    return "offline";
+  }
+
+  return device.status;
+}
 
 export interface PairingCodeResult {
   code: string;
@@ -118,6 +133,12 @@ export class DeviceService {
     const replayDevice = async (device: IDevice): Promise<PairDeviceResult> => {
       const { rawToken, tokenHash } = generateDeviceToken();
       device.deviceTokenHash = tokenHash;
+      device.clientDeviceId = input.clientDeviceId;
+      device.deviceName = input.deviceName;
+      device.deviceModel = input.deviceModel || null;
+      device.androidVersion = input.androidVersion || null;
+      device.appVersion = input.appVersion || null;
+      device.pairingIdempotencyKey = input.idempotencyKey || null;
       device.status = "active";
       device.lastSeenAt = now;
       device.disconnectedAt = null;
@@ -219,6 +240,44 @@ export class DeviceService {
     let device: IDevice | null = null;
 
     try {
+      const { rawToken, tokenHash } = generateDeviceToken();
+      const existingDevice = await Device.findOne({
+        userId: pairingRecord.userId,
+        clientDeviceId: input.clientDeviceId,
+      });
+
+      if (existingDevice) {
+        if (existingDevice.status === "suspended") {
+          throw ApiError.forbidden(
+            "Device is suspended. Please contact support."
+          );
+        }
+
+        existingDevice.deviceTokenHash = tokenHash;
+        existingDevice.deviceName = input.deviceName;
+        existingDevice.deviceModel = input.deviceModel || null;
+        existingDevice.androidVersion = input.androidVersion || null;
+        existingDevice.appVersion = input.appVersion || null;
+        existingDevice.pairingIdempotencyKey = input.idempotencyKey || null;
+        existingDevice.status = "active";
+        existingDevice.connectedAt = now;
+        existingDevice.lastSeenAt = now;
+        existingDevice.disconnectedAt = null;
+        existingDevice.disabledReason = null;
+        await existingDevice.save();
+
+        pairingRecord.deviceId = existingDevice._id;
+        await pairingRecord.save();
+
+        return {
+          deviceToken: rawToken,
+          deviceId: existingDevice._id.toString(),
+          userId: pairingRecord.userId.toString(),
+          deviceName: existingDevice.deviceName,
+          alreadyPaired: true,
+        };
+      }
+
       // Check device limit only after this request atomically claims the code.
       const activeDeviceCount = await Device.countDocuments({
         userId: pairingRecord.userId,
@@ -231,10 +290,9 @@ export class DeviceService {
         );
       }
 
-      const { rawToken, tokenHash } = generateDeviceToken();
-
       device = await Device.create({
         userId: pairingRecord.userId,
+        clientDeviceId: input.clientDeviceId,
         deviceName: input.deviceName,
         deviceModel: input.deviceModel || undefined,
         androidVersion: input.androidVersion || undefined,
@@ -410,7 +468,11 @@ export class DeviceService {
    * Get all devices for a user.
    */
   static async getUserDevices(userId: string): Promise<IDevice[]> {
-    return Device.find({ userId }).sort({ createdAt: -1 }).lean();
+    const devices = await Device.find({ userId }).sort({ createdAt: -1 }).lean();
+    return devices.map((device) => ({
+      ...device,
+      status: getEffectiveDeviceStatus(device),
+    })) as unknown as IDevice[];
   }
 
   /**
@@ -420,7 +482,10 @@ export class DeviceService {
     userId: string,
     deviceId: string
   ): Promise<IDevice | null> {
-    return Device.findOne({ _id: deviceId, userId }).lean();
+    const device = await Device.findOne({ _id: deviceId, userId }).lean();
+    return device
+      ? ({ ...device, status: getEffectiveDeviceStatus(device) } as unknown as IDevice)
+      : null;
   }
 
   /**
@@ -428,7 +493,7 @@ export class DeviceService {
    * Devices without heartbeat for more than 5 minutes are considered offline.
    */
   static async markStaleDevicesOffline(): Promise<number> {
-    const threshold = new Date(Date.now() - 5 * 60 * 1000);
+    const threshold = new Date(Date.now() - DEVICE_OFFLINE_TIMEOUT_MS);
 
     const result = await Device.updateMany(
       {
