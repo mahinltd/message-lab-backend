@@ -370,6 +370,55 @@ export async function seedDefaultContent(): Promise<void> {
       description: "Maximum requests per window per IP",
       category: "security",
     },
+    {
+      key: "payment_bkash_number",
+      value: "",
+      valueType: "string",
+      description: "bKash payment receiver number",
+      category: "payment",
+    },
+    {
+      key: "payment_bkash_type",
+      value: "Personal",
+      valueType: "string",
+      description: "bKash receiver account type",
+      category: "payment",
+    },
+    {
+      key: "payment_nagad_number",
+      value: "",
+      valueType: "string",
+      description: "Nagad payment receiver number",
+      category: "payment",
+    },
+    {
+      key: "payment_nagad_type",
+      value: "Personal",
+      valueType: "string",
+      description: "Nagad receiver account type",
+      category: "payment",
+    },
+    {
+      key: "payment_rocket_number",
+      value: "",
+      valueType: "string",
+      description: "Rocket payment receiver number",
+      category: "payment",
+    },
+    {
+      key: "payment_rocket_type",
+      value: "Personal",
+      valueType: "string",
+      description: "Rocket receiver account type",
+      category: "payment",
+    },
+    {
+      key: "payment_instructions",
+      value: "",
+      valueType: "string",
+      description: "Additional payment instructions",
+      category: "payment",
+    },
   ];
 
   for (const setting of defaultSettings) {

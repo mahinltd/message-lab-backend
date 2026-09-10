@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { PublicContentService } from "../services/publicContent.service";
+import { PlatformSettings } from "../models/PlatformSettings";
 
 /**
  * Get all page content in one request.
@@ -132,6 +133,46 @@ export const getPublicStatus = asyncHandler(
         maintenanceMode: maintenanceMode?.value === true,
         registrationOpen: registrationOpen?.value !== false,
         timestamp: new Date().toISOString(),
+      },
+    });
+  }
+);
+
+/**
+ * Get configured payment receiver methods.
+ * No authentication required.
+ * GET /api/v1/public/payment-methods
+ */
+export const getPaymentMethods = asyncHandler(
+  async (_req: Request, res: Response) => {
+    const settings = await PlatformSettings.find({ category: "payment" })
+      .select("key value")
+      .lean();
+
+    const values = new Map(
+      settings.map((setting) => [setting.key, setting.value])
+    );
+    const getStringValue = (key: string): string => {
+      const value = values.get(key);
+      return value === null || value === undefined ? "" : String(value);
+    };
+
+    res.status(200).json({
+      success: true,
+      data: {
+        bkash: {
+          number: getStringValue("payment_bkash_number"),
+          type: getStringValue("payment_bkash_type"),
+        },
+        nagad: {
+          number: getStringValue("payment_nagad_number"),
+          type: getStringValue("payment_nagad_type"),
+        },
+        rocket: {
+          number: getStringValue("payment_rocket_number"),
+          type: getStringValue("payment_rocket_type"),
+        },
+        instructions: getStringValue("payment_instructions"),
       },
     });
   }

@@ -8,6 +8,7 @@ import {
   getFeatureContent,
   getPublicPricing,
   getPublicStatus,
+  getPaymentMethods,
 } from "../controllers/publicContent.controller";
 
 const router = Router();
@@ -26,5 +27,6 @@ router.get("/content/announcement", getAnnouncement);
 router.get("/content/features", getFeatureContent);
 router.get("/pricing", getPublicPricing);
 router.get("/status", getPublicStatus);
+router.get("/payment-methods", getPaymentMethods);
 
 export default router;
