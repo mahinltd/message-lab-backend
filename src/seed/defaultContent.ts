@@ -67,19 +67,6 @@ export async function seedDefaultContent(): Promise<void> {
       body: "© 2026 Messages Lab. All rights reserved.",
       isActive: true,
     },
-    {
-      key: "footer_description",
-      category: "footer",
-      body: "Messages Lab is a complete product-as-a-service platform that turns your Android smartphone into a personal SMS gateway. Send, receive, and manage SMS through your own device and SIM card.",
-      isActive: true,
-    },
-    {
-      key: "footer_support_email",
-      category: "footer",
-      body: "support@messagelab.tech",
-      isActive: true,
-    },
-
     // Features Section
     {
       key: "features_section_title",
@@ -200,6 +187,31 @@ export async function seedDefaultContent(): Promise<void> {
       title: "Start Sending SMS",
       body: "Use the web dashboard to compose and send SMS through your own device and SIM.",
       metadata: { step: 4 },
+      isActive: true,
+    },
+    // Footer Social & Contact (Admin-editable)
+    {
+      key: "footer_social_facebook",
+      category: "footer",
+      body: "https://facebook.com/messagelab",
+      isActive: true,
+    },
+    {
+      key: "footer_support_email",
+      category: "footer",
+      body: "support@messagelab.tech",
+      isActive: true,
+    },
+    {
+      key: "footer_tagline",
+      category: "footer",
+      body: "Made with ❤️ in Bangladesh",
+      isActive: true,
+    },
+    {
+      key: "footer_description",
+      category: "footer",
+      body: "Turn your Android phone into a personal SMS gateway. Send, receive, and manage SMS through your own device.",
       isActive: true,
     },
   ];
