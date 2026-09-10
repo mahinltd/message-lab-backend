@@ -379,6 +379,26 @@ export class DeviceService {
       metadata: { deviceName: device.deviceName },
     });
 
+    const user = await mongoose.model("User").findById(userId);
+    if (user) {
+      const emailSent = await EmailService.sendDeviceAlertEmail(
+        user.email,
+        user.name,
+        "disconnected",
+        device.deviceName,
+        `${env.FRONTEND_URL}/dashboard/devices`,
+        req.ip
+      );
+
+      if (!emailSent) {
+        logger.warn("Device disconnection email could not be sent", {
+          deviceId,
+          userId,
+          email: user.email,
+        });
+      }
+    }
+
     logger.info("Device disconnected", {
       userId,
       deviceId,

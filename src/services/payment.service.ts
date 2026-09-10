@@ -109,6 +109,30 @@ export class PaymentService {
       method: input.paymentMethod,
     });
 
+    const user = await User.findById(userId);
+    if (user) {
+      const emailSent = await EmailService.sendPaymentUpdateEmail(
+        user.email,
+        user.name,
+        "submitted",
+        plan.displayName,
+        `${payment.currency} ${payment.amount}`,
+        payment.paymentMethod,
+        payment.transactionId,
+        payment.createdAt.toISOString(),
+        undefined,
+        `${env.FRONTEND_URL}/dashboard/billing`
+      );
+
+      if (!emailSent) {
+        logger.warn("Payment submission email could not be sent", {
+          paymentId: payment._id.toString(),
+          userId,
+          email: user.email,
+        });
+      }
+    }
+
     return payment;
   }
 
@@ -162,7 +186,7 @@ export class PaymentService {
       if (user) {
         const plan = await PlanConfig.findOne({ planId: payment.planId });
 
-        await EmailService.sendPaymentUpdateEmail(
+        const emailSent = await EmailService.sendPaymentUpdateEmail(
           user.email,
           user.name,
           "approved",
@@ -174,6 +198,14 @@ export class PaymentService {
           undefined,
           `${env.FRONTEND_URL}/dashboard/billing`
         );
+
+        if (!emailSent) {
+          logger.warn("Payment approval email could not be sent", {
+            paymentId: payment._id.toString(),
+            userId: payment.userId.toString(),
+            email: user.email,
+          });
+        }
       }
 
       // Audit log
@@ -211,7 +243,7 @@ export class PaymentService {
       if (user) {
         const plan = await PlanConfig.findOne({ planId: payment.planId });
 
-        await EmailService.sendPaymentUpdateEmail(
+        const emailSent = await EmailService.sendPaymentUpdateEmail(
           user.email,
           user.name,
           "rejected",
@@ -223,6 +255,14 @@ export class PaymentService {
           payment.rejectionReason,
           `${env.FRONTEND_URL}/dashboard/billing`
         );
+
+        if (!emailSent) {
+          logger.warn("Payment rejection email could not be sent", {
+            paymentId: payment._id.toString(),
+            userId: payment.userId.toString(),
+            email: user.email,
+          });
+        }
       }
 
       // Audit log

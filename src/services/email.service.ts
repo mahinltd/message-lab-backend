@@ -194,7 +194,7 @@ export class EmailService {
       to,
       subject,
       html,
-      category: "notification",
+      category: "payment",
     });
   }
 

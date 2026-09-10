@@ -314,6 +314,12 @@ export const verifyUserEmail = asyncHandler(
       metadata: { targetEmail: targetUser.email },
     });
 
+    await EmailService.sendWelcomeEmail(
+      targetUser.email,
+      targetUser.name,
+      `${env.FRONTEND_URL}/dashboard`
+    );
+
     res.status(200).json({
       success: true,
       message: "User email verified successfully",
