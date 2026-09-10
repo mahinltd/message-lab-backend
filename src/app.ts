@@ -21,6 +21,14 @@ import { logger } from "./utils/logger";
 
 const app = express();
 
+app.get("/robots.txt", (_req, res) => {
+  res
+    .status(200)
+    .set("Content-Type", "text/plain; charset=utf-8")
+    .set("Cache-Control", "public, max-age=3600")
+    .send("User-agent: *\nDisallow: /\n");
+});
+
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 
