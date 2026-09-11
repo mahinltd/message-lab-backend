@@ -47,6 +47,7 @@ const envSchema = z.object({
   UPSTASH_REDIS_URL: optionalString,
 
   RESEND_API_KEY: optionalString,
+  TURNSTILE_SECRET_KEY: optionalString,
 
   // Separate email addresses for different purposes
   EMAIL_FROM_VERIFY: z.preprocess(

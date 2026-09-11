@@ -15,6 +15,9 @@ import {
   resetPasswordSchema,
 } from "../validators/auth.validator";
 import { isProduction } from "../config/env";
+import { getClientIp } from "../utils/ip";
+import { AuthSecurityService } from "../services/authSecurity.service";
+import { verifyTurnstile } from "../lib/turnstile";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -26,33 +29,115 @@ const COOKIE_OPTIONS = {
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const validatedData = registerSchema.parse(req.body);
-  const result = await AuthService.register(validatedData, req);
+  const ip = getClientIp(req);
+  const state = await AuthSecurityService.getScopedFailureState(
+    "register",
+    ip,
+    validatedData.email
+  );
+  if (state.captchaRequired) {
+    const verification = validatedData.captchaToken
+      ? await verifyTurnstile(validatedData.captchaToken, ip)
+      : { success: false };
+    if (!verification.success) {
+      if (validatedData.captchaToken) {
+        await AuthSecurityService.recordCaptchaFailure(req, "register", validatedData.email);
+      }
+      res.status(428).json({
+        success: false,
+        code: "CAPTCHA_REQUIRED",
+        message: "CAPTCHA verification is required.",
+      });
+      return;
+    }
+  }
 
-  // Do NOT set refresh token cookie - user must verify email first
-  res.status(201).json({
-    success: true,
-    message: "Registration successful. Please check your email to verify your account.",
-    data: {
-      user: result.user,
-      requiresVerification: result.requiresVerification,
-    },
-  });
+  try {
+    const result = await AuthService.register(validatedData, req);
+    await AuthSecurityService.resetScopedFailures("register", ip, validatedData.email);
+
+    // Do NOT set refresh token cookie - user must verify email first
+    res.status(201).json({
+      success: true,
+      message: "Registration successful. Please check your email to verify your account.",
+      data: {
+        user: result.user,
+        requiresVerification: result.requiresVerification,
+      },
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.statusCode >= 400 && error.statusCode < 500) {
+      await AuthSecurityService.recordScopedFailure("register", ip, validatedData.email);
+    }
+    throw error;
+  }
 });
 
 export const login = asyncHandler(async (req: Request, res: Response) => {
   const validatedData = loginSchema.parse(req.body);
-  const result = await AuthService.login(validatedData, req);
+  const ip = getClientIp(req);
+  const state = await AuthSecurityService.getLoginFailureState(ip, validatedData.email);
 
-  res.cookie("refreshToken", result.refreshToken, COOKIE_OPTIONS);
+  if (state.locked) {
+    await AuthSecurityService.recordLoginLocked(ip, validatedData.email);
+    const settings = await AuthSecurityService.getSettings();
+    const retryAfterSeconds = Math.ceil(settings.authWindowMs / 1000);
+    res.setHeader("Retry-After", retryAfterSeconds);
+    res.status(429).json({
+      success: false,
+      message: "Too many failed login attempts. Please try again later.",
+      retryAfterSeconds,
+    });
+    return;
+  }
 
-  res.status(200).json({
-    success: true,
-    message: "Login successful",
-    data: {
-      user: result.user,
-      accessToken: result.accessToken,
-    },
-  });
+  if (state.captchaRequired) {
+    const verification = validatedData.captchaToken
+      ? await verifyTurnstile(validatedData.captchaToken, ip)
+      : { success: false };
+    if (!verification.success) {
+      if (validatedData.captchaToken) {
+        await AuthSecurityService.recordCaptchaFailure(req, "login", validatedData.email);
+      }
+      res.status(428).json({
+        success: false,
+        code: "CAPTCHA_REQUIRED",
+        message: "CAPTCHA verification is required.",
+      });
+      return;
+    }
+  }
+
+  try {
+    const result = await AuthService.login(validatedData, req);
+    await AuthSecurityService.resetLoginFailures(ip, validatedData.email);
+
+    res.cookie("refreshToken", result.refreshToken, COOKIE_OPTIONS);
+
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+      data: {
+        user: result.user,
+        accessToken: result.accessToken,
+      },
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.statusCode === 401) {
+      const newState = await AuthSecurityService.recordLoginFailure(
+        ip,
+        validatedData.email
+      );
+      res.status(401).json({
+        success: false,
+        message: error.message,
+        failedAttempts: newState.ipFails,
+        captchaRequired: newState.captchaRequired,
+      });
+      return;
+    }
+    throw error;
+  }
 });
 
 export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
@@ -86,8 +171,33 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
  */
 export const forgotPassword = asyncHandler(
   async (req: Request, res: Response) => {
-    const { email } = forgotPasswordSchema.parse(req.body);
+    const { email, captchaToken } = forgotPasswordSchema.parse(req.body);
+    const ip = getClientIp(req);
+    const accountExists = Boolean(await User.exists({ email }));
+    const state = await AuthSecurityService.getScopedFailureState("forgot", ip, email);
+    if (state.captchaRequired) {
+      const verification = captchaToken
+        ? await verifyTurnstile(captchaToken, ip)
+        : { success: false };
+      if (!verification.success) {
+        if (captchaToken) {
+          await AuthSecurityService.recordCaptchaFailure(req, "forgot", email);
+        }
+        res.status(428).json({
+          success: false,
+          code: "CAPTCHA_REQUIRED",
+          message: "CAPTCHA verification is required.",
+        });
+        return;
+      }
+    }
+
     await PasswordService.requestReset(email, req);
+    if (accountExists) {
+      await AuthSecurityService.resetScopedFailures("forgot", ip, email);
+    } else {
+      await AuthSecurityService.recordScopedFailure("forgot", ip, email);
+    }
 
     res.status(200).json({
       success: true,

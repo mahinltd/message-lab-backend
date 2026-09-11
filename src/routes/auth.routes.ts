@@ -15,22 +15,23 @@ import {
 } from "../controllers/verification.controller";
 import { refreshTokens } from "../controllers/token.controller";
 import { getCurrentUser } from "../controllers/user.controller";
-import { authRateLimiter } from "../middleware/authRateLimit.middleware";
+import {
+  forgotLimiter,
+  refreshLimiter,
+  registerLimiter,
+} from "../middleware/authRateLimit.middleware";
 import { authenticate } from "../middleware/auth.middleware";
 
 const router = Router();
 
-// Public auth routes (rate limited)
-router.use(authRateLimiter);
-
-router.post("/register", register);
+router.post("/register", registerLimiter, register);
 router.post("/verify-email", verifyEmail);
 router.post("/resend-verification", resendVerificationEmail);
-router.post("/forgot-password", forgotPassword);
-router.post("/reset-password", resetPassword);
+router.post("/forgot-password", forgotLimiter, forgotPassword);
+router.post("/reset-password", forgotLimiter, resetPassword);
 router.post("/login", login);
 router.post("/google", googleLogin);
-router.post("/refresh", refreshTokens);
+router.post("/refresh", refreshLimiter, refreshTokens);
 router.post("/logout", logout);
 
 // Protected routes — apply authenticate but DO NOT apply authRateLimiter strictly
