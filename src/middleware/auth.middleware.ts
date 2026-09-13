@@ -41,9 +41,11 @@ export const authenticate = async (
       throw ApiError.forbidden("Your account has been disabled");
     }
 
+    // The database is authoritative for authorization. The token only proves
+    // identity; its role may be stale after an admin promotion or demotion.
     req.user = {
-      userId: payload.userId,
-      role: payload.role,
+      userId: user._id.toString(),
+      role: user.role,
     };
 
     next();
