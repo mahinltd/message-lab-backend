@@ -11,8 +11,7 @@ import { env } from "../config/env";
 import { logger } from "../utils/logger";
 import { Request } from "express";
 import { PairDeviceInput, HeartbeatInput } from "../validators/device.validator";
-
-const MAX_DEVICES_PER_USER = 1;
+import { SubscriptionService } from "./subscription.service";
 const DEVICE_OFFLINE_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function getEffectiveDeviceStatus(
@@ -102,9 +101,10 @@ export class DeviceService {
       status: { $in: ["active", "offline", "paused"] },
     });
 
-    if (activeDeviceCount >= MAX_DEVICES_PER_USER) {
+    const limits = await SubscriptionService.getUserLimits(userId.toString());
+    if (activeDeviceCount >= limits.maxDevices) {
       throw ApiError.forbidden(
-        `Device limit reached. Maximum ${MAX_DEVICES_PER_USER} device(s) allowed on your current plan. Please disconnect an existing device first.`
+        `Device limit reached. Maximum ${limits.maxDevices} device(s) allowed on your current plan. Please disconnect an existing device first.`
       );
     }
 
@@ -305,6 +305,7 @@ export class DeviceService {
     }
 
     let device: IDevice | null = null;
+    let connectedDevice: IDevice | null = null;
 
     try {
       const { rawToken, tokenHash } = generateDeviceToken();
@@ -392,44 +393,51 @@ export class DeviceService {
         };
       }
 
-      // Check device limit only after this request atomically claims the code.
-      const activeDeviceCount = await Device.countDocuments({
-        userId: pairingRecord.userId,
-        status: { $in: ["active", "offline", "paused"] },
-      });
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          const activeDeviceCount = await Device.countDocuments({
+            userId: pairingRecord.userId,
+            status: { $in: ["active", "offline", "paused"] },
+          }).session(session);
+          const limits = await SubscriptionService.getUserLimits(pairingRecord.userId.toString());
+          if (activeDeviceCount >= limits.maxDevices) {
+            throw ApiError.forbidden(
+              `Device limit reached. Maximum ${limits.maxDevices} device(s) allowed on your current plan. Please disconnect an existing device first.`
+            );
+          }
 
-      if (activeDeviceCount >= MAX_DEVICES_PER_USER) {
-        throw ApiError.forbidden(
-          "Device limit reached for this account. Please disconnect an existing device first."
-        );
+          const createdDevices = await Device.create([{
+            userId: pairingRecord.userId,
+            clientDeviceId: input.clientDeviceId,
+            deviceName: input.deviceName,
+            deviceModel: input.deviceModel || undefined,
+            androidVersion: input.androidVersion || undefined,
+            appVersion: input.appVersion || undefined,
+            pairingIdempotencyKey: input.idempotencyKey || undefined,
+            deviceTokenHash: tokenHash,
+            status: "active",
+            gatewayState: "on",
+            connectedAt: now,
+            lastSeenAt: now,
+            lastHeartbeat: { lastSeenAt: now },
+          }], { session });
+          connectedDevice = createdDevices[0];
+          device = connectedDevice;
+          pairingRecord.deviceId = connectedDevice._id;
+          await pairingRecord.save({ session });
+        });
+      } finally {
+        await session.endSession();
       }
-
-      device = await Device.create({
-        userId: pairingRecord.userId,
-        clientDeviceId: input.clientDeviceId,
-        deviceName: input.deviceName,
-        deviceModel: input.deviceModel || undefined,
-        androidVersion: input.androidVersion || undefined,
-        appVersion: input.appVersion || undefined,
-        pairingIdempotencyKey: input.idempotencyKey || undefined,
-        deviceTokenHash: tokenHash,
-        status: "active",
-        gatewayState: "on",
-        connectedAt: now,
-        lastSeenAt: now,
-        lastHeartbeat: {
-          lastSeenAt: now,
-        },
-      });
-
-      pairingRecord.deviceId = device._id;
-      await pairingRecord.save();
+      if (!connectedDevice) throw ApiError.internal("Device could not be created");
+      const committedDevice = connectedDevice as IDevice;
 
       await SecurityService.recordAuditLog({
         userId: pairingRecord.userId,
         action: "DEVICE_CONNECTED",
         entityType: "Device",
-        entityId: device._id.toString(),
+        entityId: committedDevice._id.toString(),
         req,
         metadata: {
           deviceName: input.deviceName,
@@ -454,15 +462,15 @@ export class DeviceService {
 
       logger.info("Device connected successfully", {
         userId: pairingRecord.userId.toString(),
-        deviceId: device._id.toString(),
+        deviceId: committedDevice._id.toString(),
         deviceName: input.deviceName,
       });
 
       return {
         deviceToken: rawToken,
-        deviceId: device._id.toString(),
+        deviceId: committedDevice._id.toString(),
         userId: pairingRecord.userId.toString(),
-        deviceName: device.deviceName,
+        deviceName: committedDevice.deviceName,
         alreadyPaired: false,
       };
     } catch (error) {
@@ -478,8 +486,9 @@ export class DeviceService {
         }
       );
 
-      if (device) {
-        await Device.deleteOne({ _id: device._id });
+      const rollbackDevice = device as IDevice | null;
+      if (rollbackDevice) {
+        await Device.deleteOne({ _id: rollbackDevice._id });
       }
 
       throw error;

@@ -11,7 +11,7 @@ export function buildVerificationEmail(params: {
       Hi ${params.userName},
     </p>
     <p style="margin:0 0 12px;color:#4b5563;font-size:15px;line-height:1.6;">
-      Thank you for registering with Messages Lab. Please click the button below to verify your email address and activate your account.
+      Thank you for registering with MessageLab. Please click the button below to verify your email address and activate your account.
     </p>
     ${buildButton("Verify Email Address", params.verificationUrl)}
     <p style="margin:0 0 12px;color:#6b7280;font-size:13px;line-height:1.5;">
@@ -24,7 +24,7 @@ export function buildVerificationEmail(params: {
       This link will expire in ${params.expiryHours} hours.
     </p>
     <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.5;">
-      If you did not create an account with Messages Lab, you can safely ignore this email.
+      If you did not create an account with MessageLab, you can safely ignore this email.
     </p>
     <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
     <p style="margin:0;color:#9ca3af;font-size:12px;">
@@ -36,5 +36,5 @@ export function buildVerificationEmail(params: {
 }
 
 export function getVerificationEmailSubject(): string {
-  return "Verify your email address - Messages Lab";
+  return "Verify your email address - MessageLab";
 }

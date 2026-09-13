@@ -6,6 +6,7 @@ export interface IVerificationToken extends Document {
   type: "email-verification" | "password-reset" | "email-change";
   expiresAt: Date;
   usedAt?: Date;
+  newEmail?: string;
   createdAt: Date;
 }
 
@@ -34,6 +35,7 @@ const verificationTokenSchema = new Schema<IVerificationToken>(
       type: Date,
       default: null,
     },
+    newEmail: { type: String, lowercase: true, trim: true, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

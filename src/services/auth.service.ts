@@ -32,6 +32,10 @@ function buildUserResponse(user: IUser) {
     role: user.role,
     isEmailVerified: user.isEmailVerified,
     profilePicture: user.profilePicture || null,
+    authProviders: {
+      local: user.authProviders.local,
+      google: user.authProviders.google,
+    },
   };
 }
 

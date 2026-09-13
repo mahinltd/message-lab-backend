@@ -18,6 +18,10 @@ import { isProduction } from "../config/env";
 import { getClientIp } from "../utils/ip";
 import { AuthSecurityService } from "../services/authSecurity.service";
 import { verifyTurnstile } from "../lib/turnstile";
+import { getCloudinary, isCloudinaryConfigured } from "../lib/cloudinary";
+import { env } from "../config/env";
+import { VerificationToken } from "../models/VerificationToken";
+import { EmailService } from "../services/email.service";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -250,6 +254,8 @@ const changePasswordSchema = z
     path: ["confirmPassword"],
   });
 
+const emailChangeSchema = z.object({ email: z.string().email().toLowerCase().trim() });
+
 /**
  * Update current user's profile.
  * PUT /api/v1/auth/profile
@@ -347,3 +353,70 @@ export const changePassword = asyncHandler(
     });
   }
 );
+
+export const uploadProfilePicture = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) throw ApiError.unauthorized("Authentication required");
+  const file = req.file;
+  if (!file) throw ApiError.badRequest("Profile image is required");
+  if (!isCloudinaryConfigured()) throw ApiError.internal("Profile image upload is not configured");
+
+  const user = await User.findById(req.user.userId);
+  if (!user) throw ApiError.notFound("User not found");
+
+  const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
+    getCloudinary().uploader.upload_stream(
+      {
+        folder: `${env.CLOUDINARY_FOLDER}/profiles`,
+        resource_type: "image",
+        transformation: [{ width: 512, height: 512, crop: "limit", quality: "auto", fetch_format: "auto" }],
+      },
+      (error, uploaded) => {
+        if (error || !uploaded?.secure_url) reject(error || new Error("Cloudinary upload failed"));
+        else resolve({ secure_url: uploaded.secure_url });
+      },
+    ).end(file.buffer);
+  });
+
+  user.profilePicture = result.secure_url;
+  await user.save();
+  res.status(200).json({ success: true, message: "Profile picture updated", data: { profilePicture: user.profilePicture } });
+});
+
+export const requestEmailChange = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) throw ApiError.unauthorized("Authentication required");
+  const { email } = emailChangeSchema.parse(req.body);
+  const user = await User.findById(req.user.userId);
+  if (!user) throw ApiError.notFound("User not found");
+  if (email === user.email) throw ApiError.badRequest("This is already your current email");
+  if (await User.exists({ email })) throw ApiError.conflict("An account with this email already exists");
+
+  const crypto = await import("node:crypto");
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+  await VerificationToken.updateMany({ userId: user._id, type: "email-change", usedAt: null }, { $set: { usedAt: new Date() } });
+  await VerificationToken.create({ userId: user._id, token: tokenHash, type: "email-change", newEmail: email, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) });
+  const verificationUrl = `${env.FRONTEND_URL}/email-change?token=${rawToken}`;
+  await EmailService.sendAccountUpdateEmail(email, user.name, "Email change requested", `Confirm this email address: ${verificationUrl}`);
+  res.status(200).json({ success: true, message: "A confirmation link has been sent to your new email address." });
+});
+
+export const confirmEmailChange = asyncHandler(async (req: Request, res: Response) => {
+  const token = z.string().min(1).parse(req.body.token);
+  const crypto = await import("node:crypto");
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const verificationToken = await VerificationToken.findOne({ token: tokenHash, type: "email-change", usedAt: null });
+  if (!verificationToken || !verificationToken.newEmail || verificationToken.expiresAt < new Date()) {
+    throw ApiError.badRequest("Invalid or expired email confirmation link");
+  }
+  if (await User.exists({ email: verificationToken.newEmail, _id: { $ne: verificationToken.userId } })) {
+    throw ApiError.conflict("That email address is already in use");
+  }
+  const user = await User.findById(verificationToken.userId);
+  if (!user) throw ApiError.notFound("User not found");
+  verificationToken.usedAt = new Date();
+  user.email = verificationToken.newEmail;
+  user.isEmailVerified = true;
+  await Promise.all([verificationToken.save(), user.save()]);
+  await SecurityService.recordAuditLog({ userId: user._id, action: "EMAIL_CHANGED", entityType: "User", entityId: user._id.toString(), req });
+  res.status(200).json({ success: true, message: "Email address updated successfully", data: { email: user.email } });
+});

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authenticate } from "../middleware/auth.middleware";
 import {
   sendBulkSms,
+  sendSingleSms,
   getMyCampaigns,
   getCampaign,
   getCampaignJobs,
@@ -11,6 +12,7 @@ import {
   markInboxRead,
   markAllInboxRead,
 } from "../controllers/sms.controller";
+import { cancelScheduledSms, createScheduledSms, listScheduledSms } from "../controllers/scheduledSms.controller";
 
 const router = Router();
 
@@ -18,6 +20,10 @@ router.use(authenticate);
 
 // Campaigns
 router.post("/bulk", sendBulkSms);
+router.post("/single", sendSingleSms);
+router.post("/scheduled", createScheduledSms);
+router.get("/scheduled", listScheduledSms);
+router.delete("/scheduled/:scheduleId", cancelScheduledSms);
 router.get("/campaigns", getMyCampaigns);
 router.get("/campaigns/:campaignId", getCampaign);
 router.get("/campaigns/:campaignId/jobs", getCampaignJobs);

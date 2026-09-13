@@ -85,5 +85,5 @@ export function getPaymentUpdateEmailSubject(status: string): string {
     rejected: "Payment verification failed",
   };
 
-  return `${labels[status] || "Payment update"} - Messages Lab`;
+  return `${labels[status] || "Payment update"} - MessageLab`;
 }

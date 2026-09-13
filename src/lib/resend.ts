@@ -34,5 +34,5 @@ export function getFromAddress(type: "no-reply" | "update"): string {
   const address =
     type === "no-reply" ? env.EMAIL_FROM_NO_REPLY : env.EMAIL_FROM_UPDATE;
 
-  return `Messages Lab <${address}>`;
+  return `MessageLab <${address}>`;
 }

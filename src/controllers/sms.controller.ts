@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { SmsService } from "../services/sms.service";
-import { sendBulkSmsSchema } from "../validators/sms.validator";
+import { sendBulkSmsSchema, sendSingleSmsSchema } from "../validators/sms.validator";
 import { ApiError } from "../utils/ApiError";
 import { Device } from "../models/Device";
 import { IncomingSms } from "../models/IncomingSms";
@@ -36,6 +36,7 @@ export const sendBulkSms = asyncHandler(
       device._id.toString(),
       validatedData,
       req
+      , req.header("Idempotency-Key") || undefined
     );
 
     res.status(201).json({
@@ -45,6 +46,22 @@ export const sendBulkSms = asyncHandler(
     });
   }
 );
+
+export const sendSingleSms = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) throw ApiError.unauthorized("Authentication required");
+  const input = sendSingleSmsSchema.parse(req.body);
+  const device = await Device.findOne({ userId: req.user.userId, status: "active" });
+  if (!device) throw ApiError.badRequest("No active device found. Please connect a device first.");
+
+  const result = await SmsService.createBulkCampaign(
+    req.user.userId,
+    device._id.toString(),
+    { campaignName: "Single SMS", recipients: input.recipient, messageBody: input.messageBody },
+    req,
+    req.header("Idempotency-Key") || undefined,
+  );
+  res.status(201).json({ success: true, message: "SMS queued for sending", data: result });
+});
 
 /**
  * Get all campaigns for the current user.

@@ -10,16 +10,8 @@ import { env } from "../config/env";
 import { logger } from "../utils/logger";
 import { Request } from "express";
 import { SendBulkSmsInput } from "../validators/sms.validator";
-
-/**
- * Plan-based recipient limits.
- * Will be dynamic based on user subscription in the future.
- */
-const PLAN_LIMITS: Record<string, number> = {
-  free: env.FREE_PLAN_MAX_RECIPIENTS,
-  pro: env.PRO_PLAN_MAX_RECIPIENTS,
-  enterprise: 999999, // Effectively unlimited (subject to fair use)
-};
+import { SubscriptionService } from "./subscription.service";
+import { SmsUsageService } from "./smsUsage.service";
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -33,7 +25,8 @@ export class SmsService {
     userId: string,
     deviceId: string,
     input: SendBulkSmsInput,
-    req: Request
+    req: Request,
+    idempotencyKey?: string,
   ): Promise<{
     campaignId: string;
     totalRecipients: number;
@@ -42,6 +35,10 @@ export class SmsService {
     estimatedSmsParts: number;
     estimatedTimeSeconds: number;
   }> {
+    if (idempotencyKey) {
+      const existing = await SmsCampaign.findOne({ userId, idempotencyKey });
+      if (existing) return { campaignId: existing._id.toString(), totalRecipients: existing.totalRecipients, invalidCount: 0, duplicateCount: 0, estimatedSmsParts: existing.totalRecipients * existing.smsPartsPerMessage, estimatedTimeSeconds: Math.ceil(existing.totalRecipients * (existing.minDelayMs / 1000 + 1)) };
+    }
     // Verify device belongs to user and is active
     const device = await Device.findOne({
       _id: deviceId,
@@ -73,9 +70,9 @@ export class SmsService {
       );
     }
 
-    // Check plan limit (default: free)
-    const userPlan = "free"; // Will be dynamic after plan system is built
-    const maxRecipients = PLAN_LIMITS[userPlan] || PLAN_LIMITS.free;
+    const limits = await SubscriptionService.getUserLimits(userId);
+    const userPlan = limits.planId;
+    const maxRecipients = limits.maxRecipientsPerCampaign;
 
     if (parsed.valid.length > maxRecipients) {
       throw ApiError.forbidden(
@@ -83,50 +80,56 @@ export class SmsService {
       );
     }
 
-    // Calculate SMS parts
     const smsInfo = calculateSmsParts(input.messageBody);
     const totalSmsParts = parsed.valid.length * smsInfo.parts;
+    const reservedMessages = parsed.valid.length;
+    await SmsUsageService.reserve(userId, reservedMessages, limits.maxDailyMessages);
 
-    // Create campaign
-    const campaign = await SmsCampaign.create({
-      userId,
-      deviceId,
-      campaignName: input.campaignName || undefined,
-      messageBody: input.messageBody,
-      totalRecipients: parsed.valid.length,
-      status: "queued",
-      planAtCreation: userPlan,
-      minDelayMs: env.SMS_MIN_DELAY_MS,
-      smsPartsPerMessage: smsInfo.parts,
-      encoding: smsInfo.encoding,
-    });
+    let campaign: ReturnType<typeof SmsCampaign.hydrate> | null = null;
+    try {
+      const createdCampaign = await SmsCampaign.create({
+        userId,
+        deviceId,
+        campaignName: input.campaignName || undefined,
+        messageBody: input.messageBody,
+        totalRecipients: parsed.valid.length,
+        status: "queued",
+        planAtCreation: userPlan,
+        minDelayMs: limits.minSmsDelayMs,
+        smsPartsPerMessage: smsInfo.parts,
+        encoding: smsInfo.encoding,
+        idempotencyKey: idempotencyKey || null,
+      });
+      campaign = (Array.isArray(createdCampaign) ? createdCampaign[0] : createdCampaign) as ReturnType<typeof SmsCampaign.hydrate>;
 
-    // Create individual jobs for each recipient
-    const jobs = parsed.valid.map((recipient, index) => ({
-      campaignId: campaign._id,
-      userId,
-      deviceId,
-      recipient,
-      originalRecipient: input.recipients
-        .split(/[,\n;]+/)
-        .map((n) => n.trim())
-        .filter((n) => n.length > 0)[index] || recipient,
-      messageBody: input.messageBody,
-      status: "queued" as const,
-      smsParts: smsInfo.parts,
-    }));
+      const jobs = parsed.valid.map((recipient, index) => ({
+        campaignId: campaign?._id,
+        userId,
+        deviceId,
+        recipient,
+        originalRecipient: input.recipients
+          .split(/[\n,;]+/)
+          .map((n) => n.trim())
+          .filter((n) => n.length > 0)[index] || recipient,
+        messageBody: input.messageBody,
+        status: "queued" as const,
+        smsParts: smsInfo.parts,
+      }));
 
-    await SmsJob.insertMany(jobs);
-
-    // Enqueue all job IDs to Redis
-    const createdJobs = await SmsJob.find({ campaignId: campaign._id }).select("_id");
-    const jobIds = createdJobs.map((j) => j._id.toString());
-
-    await SmsQueueService.enqueueJobs(deviceId, jobIds);
-
+      await SmsJob.insertMany(jobs);
+      const createdJobs = await SmsJob.find({ campaignId: campaign._id }).select("_id");
+      await SmsQueueService.enqueueJobs(deviceId, createdJobs.map((j) => j._id.toString()));
+    } catch (error) {
+      if (campaign) {
+        await SmsJob.updateMany({ campaignId: campaign._id }, { $set: { status: "failed", failureReason: "SMS queue unavailable" } });
+        await SmsCampaign.updateOne({ _id: campaign._id }, { $set: { status: "failed", completedAt: new Date(), cancelReason: "SMS queue unavailable" } });
+      }
+      await SmsUsageService.release(userId, reservedMessages);
+      throw error;
+    }
     // Estimate time: each job takes minDelay + ~1s processing
     const estimatedTimeSeconds =
-      parsed.valid.length * (env.SMS_MIN_DELAY_MS / 1000 + 1);
+      parsed.valid.length * (limits.minSmsDelayMs / 1000 + 1);
 
     // Audit log
     await SecurityService.recordAuditLog({

@@ -1,6 +1,6 @@
-# Messages Lab — Complete Backend API Documentation
+# MessageLab — Complete Backend API Documentation
 ```markdown
-# Messages Lab — Complete Backend API Documentation
+# MessageLab — Complete Backend API Documentation
 
 > **Version:** 1.0.0
 > **Base URL:** `http://localhost:5000` (development) | `https://api.messagelab.tech` (production)
@@ -34,7 +34,7 @@
 
 ## 1. Project Overview
 
-Messages Lab is a complete product-as-a-service platform that turns an Android smartphone into a personal SMS gateway. Users install the Messages Lab Android app on their phone, connect it to their web account, and then send/receive SMS through the web dashboard using their own SIM card.
+MessageLab is a complete product-as-a-service platform that turns an Android smartphone into a personal SMS gateway. Users install the MessageLab Android app on their phone, connect it to their web account, and then send/receive SMS through the web dashboard using their own SIM card.
 
 ### Core Concepts
 
@@ -187,7 +187,7 @@ GET /api/v1/public/content
       "hero_badge": { "title": "...", "body": null }
     },
     "header": {
-      "header_logo_text": { "title": "Messages Lab", "body": null },
+      "header_logo_text": { "title": "MessageLab", "body": null },
       "header_tagline": { "title": null, "body": "Your Personal SMS Gateway" }
     },
     "footer": {
@@ -581,7 +581,7 @@ POST /api/v1/devices/pairing-code
 ```json
 {
   "success": true,
-  "message": "Pairing code generated. Scan the QR code or enter the code in the Messages Lab Android app.",
+  "message": "Pairing code generated. Scan the QR code or enter the code in the MessageLab Android app.",
   "data": {
     "code": "123456",
     "qrCodeDataUrl": "data:image/png;base64,iVBORw0KGgo...",
@@ -685,7 +685,7 @@ DELETE /api/v1/devices/:deviceId
 ## 8. Device Agent Endpoints (Android App)
 
 > **Base:** `/api/v1/device-agent`
-> These endpoints are called by the Messages Lab Android application.
+> These endpoints are called by the MessageLab Android application.
 
 ### 8.1 Pair Device (No Auth — Uses Pairing Code)
 
@@ -818,7 +818,7 @@ Authorization: DeviceToken <device-token>
     "job": {
       "jobId": "job-id",
       "recipient": "+8801711111111",
-      "messageBody": "Hello from Messages Lab!",
+      "messageBody": "Hello from MessageLab!",
       "smsParts": 1,
       "campaignId": "campaign-id"
     }
@@ -945,7 +945,7 @@ POST /api/v1/sms/bulk
 {
   "campaignName": "Eid Greetings",
   "recipients": "01711111111, 01822222222, +8801933333333",
-  "messageBody": "Happy Eid from Messages Lab!"
+  "messageBody": "Happy Eid from MessageLab!"
 }
 ```
 
@@ -994,7 +994,7 @@ GET /api/v1/sms/campaigns?page=1&limit=20
         "userId": "user-id",
         "deviceId": "device-id",
         "campaignName": "Eid Greetings",
-        "messageBody": "Happy Eid from Messages Lab!",
+        "messageBody": "Happy Eid from MessageLab!",
         "totalRecipients": 3,
         "processedCount": 3,
         "successCount": 3,
@@ -1824,6 +1824,50 @@ Loop:
 ---
 
 ## 18. Environment Variables
+
+## 19. Developer API and OTP Verification
+
+Developer API credentials are created through the authenticated developer endpoints:
+
+- `POST /api/v1/developer/api-keys`
+- `GET /api/v1/developer/api-keys`
+- `DELETE /api/v1/developer/api-keys/:credentialId`
+
+The create response contains the raw API key once. The backend stores only its SHA-256 hash. Send the key using the `x-api-key` header and never expose it in browser code or logs.
+
+### Create an OTP verification
+
+`POST /api/v1/otp/verifications`
+
+```json
+{
+  "recipient": "+8801711111111",
+  "reference": "signup-123",
+  "metadata": { "tenant": "example" }
+}
+```
+
+The response contains a non-secret `requestId` and expiry timestamp. The OTP is generated and hashed server-side, then sent through the account's active Android gateway device and SIM. OTP access, daily OTP request quotas, and SMS quotas are controlled by the active MongoDB plan configuration.
+
+### Verify an OTP
+
+`POST /api/v1/otp/verifications/verify`
+
+```json
+{
+  "requestId": "otp_example",
+  "code": "123456"
+}
+```
+
+Codes expire after five minutes and are limited to five verification attempts. API keys require both `otp:create` and `otp:verify` permissions for the corresponding operation. Invalid or exhausted requests do not reveal OTP contents.
+
+Webhook callbacks are not currently enabled. No unsigned callback behavior should be assumed.
+
+OTP lifecycle additions:
+
+- `POST /api/v1/otp/verifications/:requestId/resend` creates a new code for the same request, subject to resend, phone, account, and SMS quotas.
+- `GET /api/v1/otp/verifications/:requestId` returns verification status and the linked SMS campaign delivery status.
 
 ```env
 # App

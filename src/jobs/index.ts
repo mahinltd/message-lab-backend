@@ -4,6 +4,7 @@ import { runSubscriptionExpiryJob } from "./subscriptionExpiry.job";
 import { runDeviceOfflineMarkerJob } from "./deviceOfflineMarker.job";
 import { runTokenCleanupJob } from "./tokenCleanup.job";
 import { logger } from "../utils/logger";
+import { runScheduledSmsJob } from "./scheduledSms.job";
 
 /**
  * Register all scheduled jobs.
@@ -11,6 +12,13 @@ import { logger } from "../utils/logger";
  */
 export function registerAllJobs(): void {
   const jobs: JobDefinition[] = [
+    {
+      name: "scheduled_sms",
+      description: "Queues due one-time scheduled SMS messages through the normal SMS service",
+      intervalMs: 60 * 1000,
+      handler: runScheduledSmsJob,
+      enabled: true,
+    },
     {
       name: "verification_reminder",
       description:

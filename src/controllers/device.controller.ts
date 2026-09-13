@@ -26,7 +26,7 @@ export const generatePairingCode = asyncHandler(
     res.status(201).json({
       success: true,
       message:
-        "Pairing code generated. Scan the QR code or enter the code in the Messages Lab Android app.",
+        "Pairing code generated. Scan the QR code or enter the code in the MessageLab Android app.",
       data: {
         code: result.code,
         qrCodeDataUrl: result.qrCodeDataUrl,

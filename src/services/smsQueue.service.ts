@@ -18,11 +18,11 @@ export class SmsQueueService {
   static async enqueueJobs(deviceId: string, jobIds: string[]): Promise<void> {
     const redis = getRedisSafe();
     if (!redis) {
-      logger.warn("Redis not configured. Jobs not enqueued.", {
+      logger.error("Redis not configured. Jobs cannot be enqueued.", {
         deviceId,
         jobCount: jobIds.length,
       });
-      return;
+      throw new Error("SMS queue is unavailable");
     }
 
     const queueKey = `${QUEUE_PREFIX}${deviceId}`;

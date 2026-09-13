@@ -25,39 +25,39 @@ interface EmailSenderConfig {
 const senderMap: Record<EmailCategory, EmailSenderConfig> = {
   verification: {
     from: env.EMAIL_FROM_VERIFY,
-    label: "Messages Lab Verification",
+    label: "MessageLab Verification",
   },
   "password-reset": {
     from: env.EMAIL_FROM_VERIFY,
-    label: "Messages Lab Security",
+    label: "MessageLab Security",
   },
   "account-update": {
     from: env.EMAIL_FROM_UPDATE,
-    label: "Messages Lab Updates",
+    label: "MessageLab Updates",
   },
   "security-alert": {
     from: env.EMAIL_FROM_UPDATE,
-    label: "Messages Lab Security",
+    label: "MessageLab Security",
   },
   payment: {
     from: env.EMAIL_FROM_BILLING,
-    label: "Messages Lab Billing",
+    label: "MessageLab Billing",
   },
   subscription: {
     from: env.EMAIL_FROM_BILLING,
-    label: "Messages Lab Billing",
+    label: "MessageLab Billing",
   },
   notification: {
     from: env.EMAIL_FROM_NO_REPLY,
-    label: "Messages Lab",
+    label: "MessageLab",
   },
   support: {
     from: env.EMAIL_FROM_SUPPORT,
-    label: "Messages Lab Support",
+    label: "MessageLab Support",
   },
   "device-alert": {
     from: env.EMAIL_FROM_UPDATE,
-    label: "Messages Lab Device",
+    label: "MessageLab Device",
   },
 };
 

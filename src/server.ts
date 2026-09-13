@@ -29,7 +29,7 @@ async function startServer(): Promise<void> {
     registerAllJobs();
 
     server.listen(env.PORT, "0.0.0.0", () => {
-      logger.info(`Messages Lab backend is running on port ${env.PORT}`, {
+      logger.info(`MessageLab backend is running on port ${env.PORT}`, {
         environment: env.NODE_ENV,
         frontendUrl: env.FRONTEND_URL,
       });

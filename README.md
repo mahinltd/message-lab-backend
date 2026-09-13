@@ -1,6 +1,6 @@
-# Messages Lab Backend
+# MessageLab Backend
 
-Backend API for Messages Lab, a platform that uses a user's Android device and SIM card as an SMS gateway. The service provides authentication, device pairing, SMS campaigns, payments, subscriptions, admin tools, email verification, scheduled jobs, and public site content.
+Backend API for MessageLab, a platform that uses a user's Android device and SIM card as an SMS gateway. The service provides authentication, device pairing, SMS campaigns, payments, subscriptions, admin tools, email verification, scheduled jobs, and public site content.
 
 ## Stack
 

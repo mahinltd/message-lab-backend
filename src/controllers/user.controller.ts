@@ -13,7 +13,7 @@ export const getCurrentUser = asyncHandler(async (req: Request, res: Response) =
   }
 
   const user = await User.findById(req.user.userId).select(
-    "name email mobile role isEmailVerified isMobileVerified profilePicture createdAt lastLoginAt"
+    "name email mobile role isEmailVerified isMobileVerified profilePicture authProviders createdAt lastLoginAt"
   );
 
   if (!user) {
@@ -32,6 +32,7 @@ export const getCurrentUser = asyncHandler(async (req: Request, res: Response) =
         isEmailVerified: user.isEmailVerified,
         isMobileVerified: user.isMobileVerified,
         profilePicture: user.profilePicture || null,
+        authProviders: { local: user.authProviders.local, google: user.authProviders.google },
         createdAt: user.createdAt,
         lastLoginAt: user.lastLoginAt || null,
       },

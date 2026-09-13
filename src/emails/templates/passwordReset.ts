@@ -33,5 +33,5 @@ export function buildPasswordResetEmail(params: {
 }
 
 export function getPasswordResetEmailSubject(): string {
-  return "Reset your password - Messages Lab";
+  return "Reset your password - MessageLab";
 }

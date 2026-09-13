@@ -16,7 +16,7 @@ export async function seedDefaultContent(): Promise<void> {
       key: "hero_title",
       category: "hero",
       title: "Turn Your Android Phone Into a Personal SMS Gateway",
-      body: "Send, receive, and manage SMS through your own device using the Messages Lab platform.",
+      body: "Send, receive, and manage SMS through your own device using the MessageLab platform.",
       isActive: true,
     },
     {
@@ -36,7 +36,7 @@ export async function seedDefaultContent(): Promise<void> {
       key: "hero_cta_secondary",
       category: "hero",
       title: "View Pricing",
-      body: "/pricing",
+      body: "/#pricing",
       isActive: true,
     },
     {
@@ -50,7 +50,7 @@ export async function seedDefaultContent(): Promise<void> {
     {
       key: "header_logo_text",
       category: "header",
-      title: "Messages Lab",
+      title: "MessageLab",
       isActive: true,
     },
     {
@@ -64,14 +64,14 @@ export async function seedDefaultContent(): Promise<void> {
     {
       key: "footer_copyright",
       category: "footer",
-      body: "© 2026 Messages Lab. All rights reserved.",
+      body: "© 2026 MessageLab. All rights reserved.",
       isActive: true,
     },
     // Features Section
     {
       key: "features_section_title",
       category: "features",
-      title: "Why Choose Messages Lab?",
+      title: "Why Choose MessageLab?",
       body: "Everything you need to manage SMS through your own device.",
       isActive: true,
     },
@@ -143,7 +143,7 @@ export async function seedDefaultContent(): Promise<void> {
     {
       key: "announcement_banner",
       category: "announcement",
-      title: "Welcome to Messages Lab!",
+      title: "Welcome to MessageLab!",
       body: "Our platform is now live. Start sending SMS through your own device today.",
       metadata: { type: "info", dismissible: true },
       isActive: false,
@@ -169,7 +169,7 @@ export async function seedDefaultContent(): Promise<void> {
       key: "how_it_works_step_2",
       category: "how-it-works",
       title: "Install the Android App",
-      body: "Download the Messages Lab app on your Android phone and grant the required permissions.",
+      body: "Download the MessageLab app on your Android phone and grant the required permissions.",
       metadata: { step: 2 },
       isActive: true,
     },
@@ -241,6 +241,9 @@ export async function seedDefaultContent(): Promise<void> {
       maxDailyMessages: 50,
       maxDevices: 1,
       minSmsDelayMs: 3000,
+      apiAccess: false,
+      otpEnabled: false,
+      maxDailyOtpRequests: 0,
       features: [
         "Up to 10 recipients per campaign",
         "1 connected device",
@@ -264,6 +267,9 @@ export async function seedDefaultContent(): Promise<void> {
       maxDailyMessages: 500,
       maxDevices: 1,
       minSmsDelayMs: 3000,
+      apiAccess: false,
+      otpEnabled: false,
+      maxDailyOtpRequests: 0,
       features: [
         "Up to 20 recipients per campaign",
         "1 connected device",
@@ -288,6 +294,9 @@ export async function seedDefaultContent(): Promise<void> {
       maxDailyMessages: 5000,
       maxDevices: 5,
       minSmsDelayMs: 3000,
+      apiAccess: true,
+      otpEnabled: true,
+      maxDailyOtpRequests: 100,
       features: [
         "Unlimited recipients per campaign",
         "Up to 5 connected devices",

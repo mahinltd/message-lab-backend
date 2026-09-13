@@ -11,12 +11,12 @@ export function buildDeviceAlertEmail(params: {
   const alertConfig = {
     connected: {
       title: "New Device Connected",
-      message: "A new Android device has been connected to your Messages Lab account.",
+      message: "A new Android device has been connected to your MessageLab account.",
       color: "#10b981",
     },
     disconnected: {
       title: "Device Disconnected",
-      message: "A device has been disconnected from your Messages Lab account.",
+      message: "A device has been disconnected from your MessageLab account.",
       color: "#f59e0b",
     },
     suspicious: {
@@ -64,5 +64,5 @@ export function getDeviceAlertEmailSubject(alertType: string): string {
     suspicious: "Security alert: Suspicious device activity",
   };
 
-  return `${subjects[alertType] || "Device notification"} - Messages Lab`;
+  return `${subjects[alertType] || "Device notification"} - MessageLab`;
 }

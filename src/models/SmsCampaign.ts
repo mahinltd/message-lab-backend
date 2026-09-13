@@ -27,6 +27,7 @@ export interface ISmsCampaign extends Document {
   completedAt?: Date;
   cancelledAt?: Date;
   cancelReason?: string;
+  idempotencyKey?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -78,6 +79,7 @@ const smsCampaignSchema = new Schema<ISmsCampaign>(
     completedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
     cancelReason: { type: String, default: null },
+    idempotencyKey: { type: String, default: null },
   },
   { timestamps: true }
 );
@@ -85,6 +87,7 @@ const smsCampaignSchema = new Schema<ISmsCampaign>(
 smsCampaignSchema.index({ userId: 1, createdAt: -1 });
 smsCampaignSchema.index({ status: 1 });
 smsCampaignSchema.index({ deviceId: 1, status: 1 });
+smsCampaignSchema.index({ userId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
 
 export const SmsCampaign = mongoose.model<ISmsCampaign>(
   "SmsCampaign",

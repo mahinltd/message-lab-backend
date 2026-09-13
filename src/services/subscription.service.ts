@@ -146,6 +146,9 @@ export class SubscriptionService {
     maxDailyMessages: number;
     maxDevices: number;
     minSmsDelayMs: number;
+    apiAccess: boolean;
+    otpEnabled: boolean;
+    maxDailyOtpRequests: number;
   }> {
     const planId = await this.getCurrentPlanId(userId);
     const plan = await this.getPlanConfig(planId);
@@ -157,6 +160,9 @@ export class SubscriptionService {
       maxDailyMessages: plan.maxDailyMessages,
       maxDevices: plan.maxDevices,
       minSmsDelayMs: plan.minSmsDelayMs,
+      apiAccess: plan.apiAccess,
+      otpEnabled: plan.otpEnabled,
+      maxDailyOtpRequests: plan.maxDailyOtpRequests,
     };
   }
 

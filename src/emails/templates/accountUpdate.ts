@@ -13,7 +13,7 @@ export function buildAccountUpdateEmail(params: {
       Hi ${params.userName},
     </p>
     <p style="margin:0 0 12px;color:#4b5563;font-size:15px;line-height:1.6;">
-      The following change was made to your Messages Lab account:
+      The following change was made to your MessageLab account:
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f8fc;border-radius:6px;padding:16px;margin:16px 0;">
       <tr>
@@ -45,5 +45,5 @@ export function buildAccountUpdateEmail(params: {
 }
 
 export function getAccountUpdateEmailSubject(updateType: string): string {
-  return `Account updated: ${updateType} - Messages Lab`;
+  return `Account updated: ${updateType} - MessageLab`;
 }

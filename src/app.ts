@@ -17,6 +17,8 @@ import deviceAgentRoutes from "./routes/deviceAgent.routes";
 import smsRoutes from "./routes/sms.routes";
 import paymentRoutes from "./routes/payment.routes";
 import publicRoutes from "./routes/public.routes";
+import developerRoutes from "./routes/developer.routes";
+import otpRoutes from "./routes/otp.routes";
 import { logger } from "./utils/logger";
 
 const app = express();
@@ -81,7 +83,7 @@ if (env.NODE_ENV !== "test") {
 app.get("/", (_req, res) => {
   res.status(200).json({
     success: true,
-    service: "Messages Lab Backend API",
+    service: "MessageLab Backend API",
     health: "/api/v1/health",
     publicContent: "/api/v1/public/content",
   });
@@ -93,6 +95,8 @@ app.use("/api/v1/public", publicRoutes);
 // API Routes
 app.use("/api/v1/health", healthRoutes);
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/developer", developerRoutes);
+app.use("/api/v1/otp", otpRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/devices", deviceRoutes);
 app.use("/api/v1/device-agent", deviceAgentRoutes);

@@ -60,6 +60,7 @@ export const upsertPlan = asyncHandler(
   async (req: Request, res: Response) => {
     const validatedData = updatePlanSchema.parse(req.body);
 
+    const existingPlan = await PlanConfig.findOne({ planId: validatedData.planId });
     const plan = await PlanConfig.findOneAndUpdate(
       { planId: validatedData.planId },
       {
@@ -74,6 +75,9 @@ export const upsertPlan = asyncHandler(
           maxDailyMessages: validatedData.maxDailyMessages,
           maxDevices: validatedData.maxDevices ?? 1,
           minSmsDelayMs: validatedData.minSmsDelayMs ?? 3000,
+          apiAccess: validatedData.apiAccess ?? existingPlan?.apiAccess ?? false,
+          otpEnabled: validatedData.otpEnabled ?? existingPlan?.otpEnabled ?? false,
+          maxDailyOtpRequests: validatedData.maxDailyOtpRequests ?? existingPlan?.maxDailyOtpRequests ?? 0,
           features: validatedData.features ?? [],
           isActive: validatedData.isActive ?? true,
           sortOrder: validatedData.sortOrder ?? 0,

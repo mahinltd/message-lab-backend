@@ -209,7 +209,7 @@ export class PublicContentService {
     const plans = await PlanConfig.find({ isActive: true })
       .sort({ sortOrder: 1 })
       .select(
-        "planId displayName description priceMonthly priceYearly currency maxRecipientsPerCampaign maxDailyMessages maxDevices features"
+        "planId displayName description priceMonthly priceYearly currency maxRecipientsPerCampaign maxDailyMessages maxDevices minSmsDelayMs apiAccess otpEnabled maxDailyOtpRequests features"
       )
       .lean();
 

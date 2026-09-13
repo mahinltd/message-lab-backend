@@ -12,6 +12,9 @@ export interface IPlanConfig extends Document {
   maxDailyMessages: number;
   maxDevices: number;
   minSmsDelayMs: number;
+  apiAccess: boolean;
+  otpEnabled: boolean;
+  maxDailyOtpRequests: number;
   features: string[];
   isActive: boolean;
   sortOrder: number;
@@ -46,6 +49,9 @@ const planConfigSchema = new Schema<IPlanConfig>(
     maxDailyMessages: { type: Number, required: true, min: 0 },
     maxDevices: { type: Number, default: 1, min: 1 },
     minSmsDelayMs: { type: Number, default: 3000, min: 0 },
+    apiAccess: { type: Boolean, default: false },
+    otpEnabled: { type: Boolean, default: false },
+    maxDailyOtpRequests: { type: Number, default: 0, min: 0 },
     features: [{ type: String }],
     isActive: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 },

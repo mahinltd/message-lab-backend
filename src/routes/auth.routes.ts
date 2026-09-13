@@ -8,7 +8,11 @@ import {
   resetPassword,
   updateProfile,
   changePassword,
+  uploadProfilePicture,
+  requestEmailChange,
+  confirmEmailChange,
 } from "../controllers/auth.controller";
+import multer from "multer";
 import {
   verifyEmail,
   resendVerificationEmail,
@@ -23,6 +27,13 @@ import {
 import { authenticate } from "../middleware/auth.middleware";
 
 const router = Router();
+const profileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    callback(null, ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype));
+  },
+});
 
 router.post("/register", registerLimiter, register);
 router.post("/verify-email", verifyEmail);
@@ -41,6 +52,9 @@ protectedRouter.use(authenticate);
 protectedRouter.get("/me", getCurrentUser);
 protectedRouter.put("/profile", updateProfile);
 protectedRouter.put("/change-password", changePassword);
+protectedRouter.post("/email-change/request", requestEmailChange);
+protectedRouter.post("/profile-picture", profileUpload.single("profileImage"), uploadProfilePicture);
+router.post("/email-change/confirm", confirmEmailChange);
 
 router.use(protectedRouter);
 

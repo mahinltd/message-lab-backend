@@ -5,7 +5,7 @@ export function buildWelcomeEmail(params: {
   dashboardUrl: string;
 }): string {
   const content = `
-    <h2 style="margin:0 0 16px;color:#1f2937;font-size:20px;">Welcome to Messages Lab!</h2>
+    <h2 style="margin:0 0 16px;color:#1f2937;font-size:20px;">Welcome to MessageLab!</h2>
     <p style="margin:0 0 12px;color:#4b5563;font-size:15px;line-height:1.6;">
       Hi ${params.userName},
     </p>
@@ -17,7 +17,7 @@ export function buildWelcomeEmail(params: {
       Here are your next steps:
     </p>
     <ol style="margin:0 0 20px;padding-left:20px;color:#4b5563;font-size:14px;line-height:2;">
-      <li>Install the Messages Lab Android app</li>
+      <li>Install the MessageLab Android app</li>
       <li>Connect your device to your account</li>
       <li>Send your first SMS from the dashboard</li>
     </ol>
@@ -30,5 +30,5 @@ export function buildWelcomeEmail(params: {
 }
 
 export function getWelcomeEmailSubject(): string {
-  return "Welcome to Messages Lab - Account Activated";
+  return "Welcome to MessageLab - Account Activated";
 }
