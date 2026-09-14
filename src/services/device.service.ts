@@ -96,12 +96,13 @@ export class DeviceService {
     req: Request
   ): Promise<PairingCodeResult> {
     // Check device limit
-    const activeDeviceCount = await Device.countDocuments({
-      userId,
-      status: { $in: ["active", "offline", "paused"] },
-    });
-
-    const limits = await SubscriptionService.getUserLimits(userId.toString());
+    const [activeDeviceCount, limits] = await Promise.all([
+      Device.countDocuments({
+        userId,
+        status: { $in: ["active", "offline", "paused"] },
+      }),
+      SubscriptionService.getUserLimits(userId.toString()),
+    ]);
     if (activeDeviceCount >= limits.maxDevices) {
       throw ApiError.forbidden(
         `Device limit reached. Maximum ${limits.maxDevices} device(s) allowed on your current plan. Please disconnect an existing device first.`
@@ -131,7 +132,7 @@ export class DeviceService {
       expiresAt
     );
 
-    await SecurityService.recordAuditLog({
+    void SecurityService.recordAuditLog({
       userId,
       action: "DEVICE_PAIRING_CODE_GENERATED",
       entityType: "Device",
@@ -337,7 +338,7 @@ export class DeviceService {
         };
         await targetDevice.save();
 
-        await SecurityService.recordAuditLog({
+        void SecurityService.recordAuditLog({
           userId: pairingRecord.userId,
           action: "DEVICE_RECONNECTED",
           entityType: "Device",
@@ -433,7 +434,7 @@ export class DeviceService {
       if (!connectedDevice) throw ApiError.internal("Device could not be created");
       const committedDevice = connectedDevice as IDevice;
 
-      await SecurityService.recordAuditLog({
+      void SecurityService.recordAuditLog({
         userId: pairingRecord.userId,
         action: "DEVICE_CONNECTED",
         entityType: "Device",
@@ -448,17 +449,17 @@ export class DeviceService {
       });
 
       const UserModel = mongoose.model("User");
-      const user = await UserModel.findById(pairingRecord.userId);
-      if (user) {
-        await EmailService.sendDeviceAlertEmail(
+      void UserModel.findById(pairingRecord.userId).then((user) => {
+        if (!user) return;
+        return EmailService.sendDeviceAlertEmail(
           user.email,
           user.name,
           "connected",
           input.deviceName,
           `${env.FRONTEND_URL}/dashboard/devices`,
-          req.ip
+          req.ip,
         );
-      }
+      }).catch((error) => logger.warn("Device alert email failed", { error }));
 
       logger.info("Device connected successfully", {
         userId: pairingRecord.userId.toString(),

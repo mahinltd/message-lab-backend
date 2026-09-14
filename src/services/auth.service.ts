@@ -60,7 +60,7 @@ export class AuthService {
     // Send verification email
     await VerificationService.sendEmailVerification(newUser._id, req);
 
-    await SecurityService.recordAuditLog({
+    void SecurityService.recordAuditLog({
       userId: newUser._id,
       action: "USER_REGISTERED",
       entityType: "User",
@@ -125,7 +125,7 @@ export class AuthService {
     user.lastLoginIp = req.ip;
     await user.save();
 
-    await SecurityService.recordAuditLog({
+    void SecurityService.recordAuditLog({
       userId: user._id,
       action: "USER_LOGIN",
       entityType: "User",

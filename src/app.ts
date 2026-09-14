@@ -20,6 +20,7 @@ import publicRoutes from "./routes/public.routes";
 import developerRoutes from "./routes/developer.routes";
 import otpRoutes from "./routes/otp.routes";
 import { logger } from "./utils/logger";
+import { requestTimingMiddleware } from "./middleware/requestTiming.middleware";
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser(env.SESSION_SECRET));
 
 app.use(requestContextMiddleware);
+app.use(requestTimingMiddleware);
 app.use(globalRateLimiter);
 
 if (env.NODE_ENV !== "test") {
