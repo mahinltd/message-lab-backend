@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { env } from "../config/env";
 import { logger } from "../utils/logger";
+import { ensureSmsCampaignIndexes } from "../models/SmsCampaign";
 
 mongoose.set("strictQuery", true);
 
@@ -29,6 +30,7 @@ export async function connectDatabase(): Promise<void> {
   });
 
   await mongoose.connect(env.MONGODB_URI);
+  await ensureSmsCampaignIndexes();
 }
 
 export async function disconnectDatabase(): Promise<void> {

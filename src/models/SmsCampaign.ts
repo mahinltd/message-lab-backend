@@ -79,7 +79,7 @@ const smsCampaignSchema = new Schema<ISmsCampaign>(
     completedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
     cancelReason: { type: String, default: null },
-    idempotencyKey: { type: String, default: null },
+    idempotencyKey: { type: String, default: undefined },
   },
   { timestamps: true }
 );
@@ -87,9 +87,29 @@ const smsCampaignSchema = new Schema<ISmsCampaign>(
 smsCampaignSchema.index({ userId: 1, createdAt: -1 });
 smsCampaignSchema.index({ status: 1 });
 smsCampaignSchema.index({ deviceId: 1, status: 1 });
-smsCampaignSchema.index({ userId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+smsCampaignSchema.index(
+  { userId: 1, idempotencyKey: 1 },
+  {
+    name: "user_idempotency_key_unique",
+    unique: true,
+    partialFilterExpression: { idempotencyKey: { $type: "string" } },
+  },
+);
 
 export const SmsCampaign = mongoose.model<ISmsCampaign>(
   "SmsCampaign",
   smsCampaignSchema
 );
+
+export async function ensureSmsCampaignIndexes(): Promise<void> {
+  const indexes = await SmsCampaign.collection.listIndexes().toArray();
+  const legacyIndex = indexes.find(
+    (index) => index.name === "userId_1_idempotencyKey_1",
+  );
+
+  if (legacyIndex) {
+    await SmsCampaign.collection.dropIndex(legacyIndex.name);
+  }
+
+  await SmsCampaign.createIndexes();
+}

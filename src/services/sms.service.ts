@@ -98,7 +98,7 @@ export class SmsService {
         minDelayMs: limits.minSmsDelayMs,
         smsPartsPerMessage: smsInfo.parts,
         encoding: smsInfo.encoding,
-        idempotencyKey: idempotencyKey || null,
+        ...(idempotencyKey ? { idempotencyKey } : {}),
       });
       campaign = (Array.isArray(createdCampaign) ? createdCampaign[0] : createdCampaign) as ReturnType<typeof SmsCampaign.hydrate>;
 
